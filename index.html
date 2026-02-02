@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Trabalho 3D - WebGL</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+        }
+
+        canvas {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="meuCanvas"></canvas>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
+
+    <script src="js/shaders.js"></script>
+
+    <!-- Módulos de Matemática -->
+    <script src="js/matrix_core.js"></script>
+    <script src="js/matrix_rotation.js"></script>
+    <script src="js/matrix_projection.js"></script>
+    <script src="js/interpolation.js"></script>
+    <script src="js/obj_loader.js"></script>
+
+    <script src="js/main.js"></script>
+</body>
+
+</html>
