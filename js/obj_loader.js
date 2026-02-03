@@ -14,6 +14,85 @@ async function carregarOBJ(url) {
 }
 
 /**
+ * Carrega e parseia um arquivo OBJ, normalizando-o automaticamente
+ * Centraliza na origem e escala para caber em um cubo unitário
+ * @param {string} url - Caminho para o arquivo .obj
+ * @returns {Promise<Object>} Objeto normalizado com vértices, normais, texturas e índices
+ */
+async function carregarOBJNormalizado(url) {
+    const response = await fetch(url);
+    const text = await response.text();
+    const modelo = parsearOBJ(text);
+    return normalizarModelo(modelo);
+}
+
+/**
+ * Normaliza um modelo: centraliza na origem e escala para caber em um cubo unitário
+ * @param {Object} modelo - Modelo parseado do OBJ
+ * @returns {Object} Modelo normalizado
+ */
+function normalizarModelo(modelo) {
+    const vertices = modelo.vertices;
+    const numVertices = vertices.length / 3;
+
+    // Encontra os limites do modelo (bounding box)
+    let minX = Infinity, minY = Infinity, minZ = Infinity;
+    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+    for (let i = 0; i < numVertices; i++) {
+        const x = vertices[i * 3];
+        const y = vertices[i * 3 + 1];
+        const z = vertices[i * 3 + 2];
+
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        minZ = Math.min(minZ, z);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+        maxZ = Math.max(maxZ, z);
+    }
+
+    // Calcula o centro e o tamanho do modelo
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const centerZ = (minZ + maxZ) / 2;
+
+    const sizeX = maxX - minX;
+    const sizeY = maxY - minY;
+    const sizeZ = maxZ - minZ;
+    const maxSize = Math.max(sizeX, sizeY, sizeZ);
+
+    // Fator de escala para caber em um cubo de -0.5 a 0.5 (tamanho 1)
+    const scaleFactor = maxSize > 0 ? 1.0 / maxSize : 1.0;
+
+    // Cria novo array de vértices normalizados
+    const normalizedVertices = new Float32Array(vertices.length);
+
+    for (let i = 0; i < numVertices; i++) {
+        // Centraliza e escala
+        normalizedVertices[i * 3] = (vertices[i * 3] - centerX) * scaleFactor;
+        normalizedVertices[i * 3 + 1] = (vertices[i * 3 + 1] - centerY) * scaleFactor;
+        normalizedVertices[i * 3 + 2] = (vertices[i * 3 + 2] - centerZ) * scaleFactor;
+    }
+
+    console.log(`Modelo normalizado: centro original (${centerX.toFixed(2)}, ${centerY.toFixed(2)}, ${centerZ.toFixed(2)}), tamanho ${maxSize.toFixed(2)}, escala ${scaleFactor.toFixed(4)}`);
+
+    return {
+        vertices: normalizedVertices,
+        normais: modelo.normais,
+        texturas: modelo.texturas,
+        indices: modelo.indices,
+        numVertices: modelo.numVertices,
+        numFaces: modelo.numFaces,
+        // Informações extras sobre a normalização
+        originalBounds: { minX, minY, minZ, maxX, maxY, maxZ },
+        originalCenter: { x: centerX, y: centerY, z: centerZ },
+        originalSize: maxSize,
+        scaleFactor: scaleFactor
+    };
+}
+
+/**
  * Parseia o conteúdo de texto de um arquivo OBJ
  * @param {string} objText - Conteúdo do arquivo OBJ
  * @returns {Object} Dados parseados do modelo
