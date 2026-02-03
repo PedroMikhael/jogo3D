@@ -40,16 +40,20 @@ function mat4Scale(sx, sy, sz) {
 }
 
 /**
- * Multiplicação de duas matrizes 4x4
+ * Multiplicação de duas matrizes 4x4 (column-major order - WebGL)
+ * Resultado: a * b (aplica b primeiro, depois a)
  */
 function multiplyMatrices(a, b) {
     let out = new Float32Array(16);
-    for (let i = 0; i < 4; i++) {
-        for (let j = 0; j < 4; j++) {
-            out[i * 4 + j] = a[i * 4 + 0] * b[0 * 4 + j] +
-                a[i * 4 + 1] * b[1 * 4 + j] +
-                a[i * 4 + 2] * b[2 * 4 + j] +
-                a[i * 4 + 3] * b[3 * 4 + j];
+
+    // Column-major: out[col * 4 + row]
+    for (let col = 0; col < 4; col++) {
+        for (let row = 0; row < 4; row++) {
+            out[col * 4 + row] =
+                a[0 * 4 + row] * b[col * 4 + 0] +
+                a[1 * 4 + row] * b[col * 4 + 1] +
+                a[2 * 4 + row] * b[col * 4 + 2] +
+                a[3 * 4 + row] * b[col * 4 + 3];
         }
     }
     return out;

@@ -1,5 +1,6 @@
 /**
  * Converte arquivos .obj em buffers prontos para WebGL
+ * Com suporte a materiais MTL
  */
 
 /**
@@ -11,6 +12,43 @@ async function carregarOBJ(url) {
     const response = await fetch(url);
     const text = await response.text();
     return parsearOBJ(text);
+}
+
+/**
+ * Carrega um OBJ junto com seu arquivo MTL (materiais)
+ * @param {string} objUrl - Caminho para o arquivo .obj
+ * @returns {Promise<Object>} Modelo com vértices, normais, cores por vértice e materiais
+ */
+async function carregarOBJComMTL(objUrl) {
+    const response = await fetch(objUrl);
+    const text = await response.text();
+
+    // Base URL para resolver caminhos do MTL
+    const baseUrl = objUrl.substring(0, objUrl.lastIndexOf('/') + 1);
+
+    // Procura a linha 'mtllib' no OBJ para encontrar o arquivo MTL
+    let mtlFile = null;
+    const linhas = text.split('\n');
+    for (const linha of linhas) {
+        if (linha.trim().startsWith('mtllib')) {
+            mtlFile = linha.trim().split(/\s+/)[1];
+            break;
+        }
+    }
+
+    // Carrega o MTL se encontrado
+    let materials = {};
+    if (mtlFile) {
+        const mtlUrl = baseUrl + mtlFile;
+        console.log(`Carregando MTL: ${mtlUrl}`);
+        materials = await carregarMTL(mtlUrl);
+    }
+
+    // Parseia o OBJ com suporte a materiais
+    const modelo = parsearOBJComMateriais(text, materials);
+    modelo.materials = materials;
+
+    return modelo;
 }
 
 /**
@@ -274,6 +312,209 @@ function desenharOBJ(gl, buffers, program) {
     }
 
     // Desenha usando índices
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
+    gl.drawElements(gl.TRIANGLES, buffers.numIndices, gl.UNSIGNED_SHORT, 0);
+}
+
+/**
+ * Parseia OBJ com suporte a materiais MTL
+ * Gera cores por vértice baseado no material ativo
+ * @param {string} objText - Conteúdo do arquivo OBJ
+ * @param {Object} materials - Materiais carregados do MTL
+ * @returns {Object} Modelo com cores por vértice
+ */
+function parsearOBJComMateriais(objText, materials) {
+    const tempVertices = [];
+    const tempNormais = [];
+    const tempTexturas = [];
+
+    const vertices = [];
+    const normais = [];
+    const texturas = [];
+    const cores = [];  // Novo: cores por vértice
+    const indices = [];
+
+    const vertexCache = {};
+    let indexCounter = 0;
+
+    // Material atual
+    let currentMaterial = null;
+    let currentColor = [0.5, 0.5, 0.5];  // Cor padrão cinza
+
+    const linhas = objText.split('\n');
+
+    for (let linha of linhas) {
+        linha = linha.trim();
+        if (linha.startsWith('#') || linha.length === 0) continue;
+
+        const partes = linha.split(/\s+/);
+        const tipo = partes[0];
+
+        switch (tipo) {
+            case 'v':
+                tempVertices.push([
+                    parseFloat(partes[1]),
+                    parseFloat(partes[2]),
+                    parseFloat(partes[3])
+                ]);
+                break;
+
+            case 'vn':
+                tempNormais.push([
+                    parseFloat(partes[1]),
+                    parseFloat(partes[2]),
+                    parseFloat(partes[3])
+                ]);
+                break;
+
+            case 'vt':
+                tempTexturas.push([
+                    parseFloat(partes[1]),
+                    parseFloat(partes[2] || 0)
+                ]);
+                break;
+
+            case 'usemtl':
+                // Troca de material
+                currentMaterial = partes[1];
+                if (materials[currentMaterial]) {
+                    currentColor = materials[currentMaterial].diffuse;
+                } else {
+                    currentColor = [0.5, 0.5, 0.5];
+                }
+                break;
+
+            case 'f':
+                const faceVertices = partes.slice(1);
+                for (let i = 1; i < faceVertices.length - 1; i++) {
+                    processarVertice(faceVertices[0]);
+                    processarVertice(faceVertices[i]);
+                    processarVertice(faceVertices[i + 1]);
+                }
+                break;
+        }
+    }
+
+    function processarVertice(vertexStr) {
+        // Chave única inclui material atual
+        const cacheKey = vertexStr + '_' + currentMaterial;
+
+        if (vertexCache[cacheKey] !== undefined) {
+            indices.push(vertexCache[cacheKey]);
+            return;
+        }
+
+        const partes = vertexStr.split('/');
+        const vIdx = parseInt(partes[0]) - 1;
+        const vtIdx = partes[1] ? parseInt(partes[1]) - 1 : -1;
+        const vnIdx = partes[2] ? parseInt(partes[2]) - 1 : -1;
+
+        if (tempVertices[vIdx]) {
+            vertices.push(...tempVertices[vIdx]);
+        }
+
+        if (vtIdx >= 0 && tempTexturas[vtIdx]) {
+            texturas.push(...tempTexturas[vtIdx]);
+        } else {
+            texturas.push(0, 0);
+        }
+
+        if (vnIdx >= 0 && tempNormais[vnIdx]) {
+            normais.push(...tempNormais[vnIdx]);
+        } else {
+            normais.push(0, 1, 0);
+        }
+
+        // Adiciona cor do material atual
+        cores.push(...currentColor);
+
+        vertexCache[cacheKey] = indexCounter;
+        indices.push(indexCounter);
+        indexCounter++;
+    }
+
+    console.log(`OBJ parseado com materiais: ${vertices.length / 3} vértices, ${indices.length / 3} faces`);
+
+    return {
+        vertices: new Float32Array(vertices),
+        normais: new Float32Array(normais),
+        texturas: new Float32Array(texturas),
+        cores: new Float32Array(cores),
+        indices: new Uint16Array(indices),
+        numVertices: vertices.length / 3,
+        numFaces: indices.length / 3
+    };
+}
+
+/**
+ * Cria buffers WebGL para modelo com cores
+ * @param {WebGLRenderingContext} gl - Contexto WebGL
+ * @param {Object} modelo - Modelo com cores
+ * @returns {Object} Buffers prontos para renderização
+ */
+function criarBuffersOBJComCores(gl, modelo) {
+    const vertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, modelo.vertices, gl.STATIC_DRAW);
+
+    const normalBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, modelo.normais, gl.STATIC_DRAW);
+
+    const texturaBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, texturaBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, modelo.texturas, gl.STATIC_DRAW);
+
+    // Buffer de cores
+    const colorBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, modelo.cores, gl.STATIC_DRAW);
+
+    const indexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, modelo.indices, gl.STATIC_DRAW);
+
+    return {
+        vertices: vertexBuffer,
+        normais: normalBuffer,
+        texturas: texturaBuffer,
+        cores: colorBuffer,
+        indices: indexBuffer,
+        numIndices: modelo.indices.length,
+        hasCores: true
+    };
+}
+
+/**
+ * Desenha um modelo OBJ com cores por vértice
+ * @param {WebGLRenderingContext} gl - Contexto WebGL
+ * @param {Object} buffers - Buffers do modelo
+ * @param {WebGLProgram} program - Programa shader
+ */
+function desenharOBJComCores(gl, buffers, program) {
+    // Conecta vértices
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffers.vertices);
+    const posLoc = gl.getAttribLocation(program, "aVertexPosition");
+    gl.enableVertexAttribArray(posLoc);
+    gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 0, 0);
+
+    // Conecta normais
+    const normalLoc = gl.getAttribLocation(program, "aVertexNormal");
+    if (normalLoc >= 0) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffers.normais);
+        gl.enableVertexAttribArray(normalLoc);
+        gl.vertexAttribPointer(normalLoc, 3, gl.FLOAT, false, 0, 0);
+    }
+
+    // Conecta cores
+    const colorLoc = gl.getAttribLocation(program, "aVertexColor");
+    if (colorLoc >= 0 && buffers.cores) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffers.cores);
+        gl.enableVertexAttribArray(colorLoc);
+        gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
+    }
+
+    // Desenha
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
     gl.drawElements(gl.TRIANGLES, buffers.numIndices, gl.UNSIGNED_SHORT, 0);
 }

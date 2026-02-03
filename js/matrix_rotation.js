@@ -1,10 +1,20 @@
 /**
  * Transformações de Rotação 4x4
  * Matrizes para rotação nos eixos X, Y e Z
+ * 
+ * Formato compatível com o código do professor:
+ * matrotX, matrotY, matrotZ
  */
 
 /**
- * Transformação de Pitch - Rotação em X
+ * Converte graus para radianos
+ */
+function degreesToRadians(degrees) {
+    return degrees * Math.PI / 180.0;
+}
+
+/**
+ * Transformação de Pitch - Rotação em X (radianos)
  */
 function mat4RotateX(angle) {
     const c = Math.cos(angle);
@@ -18,7 +28,7 @@ function mat4RotateX(angle) {
 }
 
 /**
- * Transformação de Yaw - Rotação em Y
+ * Transformação de Yaw - Rotação em Y (radianos)
  */
 function mat4RotateY(angle) {
     const c = Math.cos(angle);
@@ -32,7 +42,7 @@ function mat4RotateY(angle) {
 }
 
 /**
- * Transformação de Roll - Rotação em Z
+ * Transformação de Roll - Rotação em Z (radianos)
  */
 function mat4RotateZ(angle) {
     const c = Math.cos(angle);
@@ -43,4 +53,28 @@ function mat4RotateZ(angle) {
         0, 0, 1, 0,
         0, 0, 0, 1
     ]);
+}
+
+/**
+ * Rotação em X usando graus (estilo do professor)
+ * Equivalente a: matrotX do código do professor
+ */
+function mat4RotateXDegrees(angleDegrees) {
+    return mat4RotateX(degreesToRadians(angleDegrees));
+}
+
+/**
+ * Rotação em Y usando graus (estilo do professor)
+ * Equivalente a: matrotY do código do professor
+ */
+function mat4RotateYDegrees(angleDegrees) {
+    return mat4RotateY(degreesToRadians(angleDegrees));
+}
+
+/**
+ * Rotação em Z usando graus (estilo do professor)
+ * Equivalente a: matrotZ do código do professor
+ */
+function mat4RotateZDegrees(angleDegrees) {
+    return mat4RotateZ(degreesToRadians(angleDegrees));
 }
