@@ -27,7 +27,7 @@ const MAZE_MAX_Z = 1.0;
 
 // Posição inicial no centro do labirinto
 let cameraX = 0;
-let cameraY = 0;  // Altura fixa da câmera (olho do jogador, perto do chão)
+let cameraY = -0.01;  // Altura fixa da câmera (olho do jogador, perto do chão)
 let cameraZ = 0;     // Centro do labirinto
 
 // Ângulos de rotação da câmera
