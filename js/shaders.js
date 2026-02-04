@@ -25,16 +25,17 @@ const vsSource = `#version 300 es
             }
         }
         
-        // vWorldPos precisa ser a posição no mundo para a lanterna funcionar
-        // Como o uModelViewMatrix já inclui a câmera, vamos usar apenas a posição do vértice
-        vWorldPos = aVertexPosition.xyz;
-        vNormal = aVertexNormal;
+        // Passamos a normal transformada para o fragment shader
+        // Usamos mat3(uModelViewMatrix) para rotacionar as normais corretamente
+        vNormal = mat3(uModelViewMatrix) * aVertexNormal;
+        
+        // vWorldPos é a posição do vértice no "espaço da câmera" para facilitar o Phong
+        vWorldPos = (uModelViewMatrix * aVertexPosition).xyz; 
         vColor = aVertexColor;
         
-        gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+        gl_Position = uProjectionMatrix * uModelViewMatrix * pos;
     }
 `;
-
 
 const fsSource = `#version 300 es
     precision highp float;
@@ -48,64 +49,67 @@ const fsSource = `#version 300 es
     uniform int uUseMTLColor;
     uniform sampler2D uStoneTexture;
 
-    uniform vec3 uLightPos;   
-    uniform vec3 uLightDir;   
-    uniform float uCutOff;    
+    uniform vec3 uLightPos;   // Posição da lanterna
+    uniform vec3 uLightDir;   // Direção da lanterna
+    uniform float uCutOff;    // Coseno do ângulo do cone
 
     out vec4 fragColor;
 
     void main() {
-        vec3 normal = normalize(vNormal);
-        vec3 color;
+        vec3 N = normalize(vNormal);
+        vec3 L_dir = normalize(uLightDir);
+        
+        // Vetor do fragmento para a luz (Posição da luz no espaço da câmera é [0,0,0] se estiver na mão)
+        // Mas como passamos uLightPos, usamos a distância real:
+        vec3 L = normalize(-vWorldPos); 
+        
+        vec3 baseColor;
 
-        // 1. COR BASE
+        // 1. RECUPERAÇÃO DA COR ORIGINAL (Consertando o "Preto e Branco")
         if (uIsKey == 1 || uUseMTLColor == 1) {
-            color = (length(vColor) > 0.01) ? vColor : vec3(0.5);
+            baseColor = (length(vColor) > 0.01) ? vColor : vec3(0.6, 0.6, 0.6);
         } else {
-            vec2 uv = (abs(normal.x) > 0.5) ? vWorldPos.zy : vWorldPos.xz;
-            color = texture(uStoneTexture, uv * 2.0).rgb;
+            vec2 uv = (abs(N.x) > 0.5) ? vWorldPos.zy : vWorldPos.xz;
+            baseColor = texture(uStoneTexture, uv * 2.0).rgb;
         }
 
-        // 2. CÁLCULO DA LANTERNA (SPOTLIGHT CORRIGIDO)
+        // 2. MODELO DE PHONG (Ambient, Diffuse, Specular)
         
-        // Empurramos a origem da luz um pouco para frente do 'rosto' para não sumir ao encostar na parede
-        vec3 lightForward = normalize(uLightDir);
-        vec3 lightOrigin = uLightPos + (lightForward * 0.1); 
+        // AMBIENT: Luz mínima para não ficar breu total
+        vec3 ambient = 0.1 * baseColor;
 
-        // Vetor que vai do fragmento (parede) para a luz
-        vec3 dirParaLuz = normalize(lightOrigin - vWorldPos); 
+        // CÁLCULO DO CONE DA LANTERNA (Spotlight)
+        float theta = dot(normalize(vWorldPos), vec3(0.0, 0.0, -1.0));
         
-        // Direção para onde a lanterna aponta (invertida para o cálculo de produto escalar)
-        vec3 spotDir = normalize(-uLightDir);
-
-        // Cosseno do ângulo entre a direção da lanterna e o fragmento
-        float theta = dot(dirParaLuz, spotDir);
-        
-        float ambient = 0.10; // Um pouco mais escuro para o terror
-        float spotlight = 0.0;
+        vec3 diffuse = vec3(0.0);
+        vec3 specular = vec3(0.0);
 
         if(theta > uCutOff) {
-            // Iluminação difusa (Lambert)
-            // Invertemos dirParaLuz para o dot product ficar positivo na face correta
-            float diff = max(dot(normal, dirParaLuz), 0.0);
+            // DIFFUSE: A cor revelada pela lanterna
+            float diffFactor = max(dot(N, L), 0.0);
+            diffuse = diffFactor * baseColor;
+
+            // SPECULAR: O brilho (Phong) - Essencial para Chaves e Esqueleto
+            vec3 V = normalize(-vWorldPos); // Vetor para o observador
+            vec3 R = reflect(-L, N);        // Vetor de reflexão
             
-            // Atenuação (Suavizada para não apagar bruscamente)
-            float dist = distance(lightOrigin, vWorldPos);
-            float attenuation = 1.0 / (1.0 + 0.3 * dist + 0.1 * (dist * dist));
+            float specFactor = pow(max(dot(R, V), 0.0), 32.0); // 32.0 é o brilho (shininess)
+            specular = vec3(0.5) * specFactor; // Brilho branco
             
-            // Efeito de suavização na borda do círculo (Penumbra)
-            float intensity = clamp((theta - uCutOff) / 0.1, 0.0, 1.0);
+            // Atenuação e Intensidade do Foco
+            float dist = length(vWorldPos);
+            float attenuation = 1.0 / (1.0 + 0.2 * dist + 0.1 * (dist * dist));
+            float spotIntensity = clamp((theta - uCutOff) / 0.1, 0.0, 1.0);
             
-            spotlight = diff * attenuation * intensity * 4.0; // Aumentei a força (4.0)
+            diffuse *= attenuation * spotIntensity * 2.0;
+            specular *= attenuation * spotIntensity * 2.0;
         }
 
-        vec3 finalColor = color * (ambient + spotlight);
-        
-        // 3. EFEITO DE NEVOEIRO (FOG)
-        // Isso impede que você veja o final do labirinto sem luz
-        float fog = exp(-0.6 * distance(uLightPos, vWorldPos));
-        finalColor *= clamp(fog, 0.0, 1.0);
+        // Combinação final: Ambient + Diffuse + Specular
+        vec3 finalColor = ambient + diffuse + specular;
 
-        fragColor = vec4(finalColor, 1.0);
+        // FOG (Nevoeiro de distância)
+        float fog = exp(-0.4 * length(vWorldPos));
+        fragColor = vec4(finalColor * fog, 1.0);
     }
 `;
