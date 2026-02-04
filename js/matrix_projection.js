@@ -1,6 +1,8 @@
 /**
  * Matrizes de Projeção e Câmera
  * Funções para criar matrizes de projeção perspectiva, ortográfica e view (lookAt)
+ * 
+ * Inclui funções do professor: createPerspective e createCamera
  */
 
 /**
@@ -42,7 +44,7 @@ function calculaProjecaoPerspectivaSimples(fovy, aspect, near, far) {
 }
 
 /**
- * Cria uma matriz de projeção perspectiva
+ * Cria uma matriz de projeção perspectiva (radianos)
  */
 function perspective(fov, aspect, near, far) {
     const f = 1.0 / Math.tan(fov / 2);
@@ -51,6 +53,32 @@ function perspective(fov, aspect, near, far) {
         0, f, 0, 0,
         0, 0, (far + near) / (near - far), -1,
         0, 0, (2 * far * near) / (near - far), 0
+    ]);
+}
+
+/**
+ * Cria uma matriz de projeção perspectiva usando graus (estilo do professor)
+ * Equivalente a: createPerspective do código do professor
+ * @param {number} fovy - Campo de visão vertical em GRAUS
+ * @param {number} aspect - Proporção largura/altura
+ * @param {number} near - Plano de corte próximo
+ * @param {number} far - Plano de corte distante
+ */
+function createPerspective(fovy, aspect, near, far) {
+    // Converte graus para radianos
+    var fovRad = fovy * Math.PI / 180.0;
+
+    var fy = 1 / Math.tan(fovRad / 2.0);
+    var fx = fy / aspect;
+    var B = (2 * far * near) / (near - far);
+    var A = (far + near) / (near - far);
+
+    // Retorna em formato coluna-major para WebGL
+    return new Float32Array([
+        fx, 0.0, 0.0, 0.0,
+        0.0, fy, 0.0, 0.0,
+        0.0, 0.0, A, -1.0,
+        0.0, 0.0, B, 0.0
     ]);
 }
 
@@ -103,4 +131,17 @@ function lookAt(eye, center, up) {
         -(z[0] * eye[0] + z[1] * eye[1] + z[2] * eye[2]),
         1
     ]);
+}
+
+/**
+ * Cria uma matriz de câmera (estilo do professor)
+ * Equivalente a: createCamera do código do professor
+ * Nota: Esta versão NÃO requer math.js
+ * @param {Array} pos - Posição da câmera [x, y, z]
+ * @param {Array} target - Ponto alvo [x, y, z]
+ * @param {Array} up - Vetor up [x, y, z]
+ */
+function createCamera(pos, target, up) {
+    // Esta função é equivalente ao lookAt
+    return lookAt(pos, target, up);
 }

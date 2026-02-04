@@ -16,21 +16,38 @@
             height: 100vh;
             display: block;
         }
+
+        #coords {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 15px;
+            font-family: monospace;
+            font-size: 14px;
+            border-radius: 5px;
+            z-index: 100;
+        }
     </style>
 </head>
 
 <body>
+    <div id="coords">X: 0 | Y: 0 | Z: 0</div>
     <canvas id="meuCanvas"></canvas>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
 
     <script src="js/shaders.js"></script>
+    <script src="js/webgl_utils.js"></script>
 
     <!-- Módulos de Matemática -->
     <script src="js/matrix_core.js"></script>
     <script src="js/matrix_rotation.js"></script>
     <script src="js/matrix_projection.js"></script>
     <script src="js/interpolation.js"></script>
+    <script src="js/texture_loader.js"></script>
+    <script src="js/mtl_loader.js"></script>
     <script src="js/obj_loader.js"></script>
 
     <script src="js/main.js"></script>
