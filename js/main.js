@@ -316,8 +316,8 @@ function renderizar() {
     const uCutOff = gl.getUniformLocation(shaderProgram, "uCutOff");
 
     gl.uniform3fv(uLightPos, [0.1, -0.1 , 0.0 ]);
-    gl.uniform3fv(uLightDir, [0.0, 0.0 , -1.0 ]);
-    gl.uniform1f(uCutOff, Math.cos(Math.PI / 6)); // Ângulo do foco da lanterna (18 graus)
+    gl.uniform3fv(uLightDir, [0.0, 0.0 , -1.0 ]);   
+    gl.uniform1f(uCutOff, Math.cos(Math.PI / 15)); // Ângulo do foco da lanterna (18 graus)
 
     // Vetor "para cima" sempre é Y positivo
     const up = [0, 1, 0];

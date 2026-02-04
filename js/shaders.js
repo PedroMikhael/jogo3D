@@ -25,11 +25,10 @@ const vsSource = `#version 300 es
             }
         }
         
-        // Passamos a normal transformada para o fragment shader
-        // Usamos mat3(uModelViewMatrix) para rotacionar as normais corretamente
+        // Transformação da normal para o espaço da câmera
         vNormal = mat3(uModelViewMatrix) * aVertexNormal;
         
-        // vWorldPos é a posição do vértice no "espaço da câmera" para facilitar o Phong
+        // Posição no espaço da câmera (View Space)
         vWorldPos = (uModelViewMatrix * aVertexPosition).xyz; 
         vColor = aVertexColor;
         
@@ -49,67 +48,70 @@ const fsSource = `#version 300 es
     uniform int uUseMTLColor;
     uniform sampler2D uStoneTexture;
 
-    uniform vec3 uLightPos;   // Posição da lanterna
-    uniform vec3 uLightDir;   // Direção da lanterna
-    uniform float uCutOff;    // Coseno do ângulo do cone
+    uniform vec3 uLightPos;   
+    uniform vec3 uLightDir;   
+    uniform float uCutOff;    
 
     out vec4 fragColor;
 
     void main() {
         vec3 N = normalize(vNormal);
-        vec3 L_dir = normalize(uLightDir);
-        
-        // Vetor do fragmento para a luz (Posição da luz no espaço da câmera é [0,0,0] se estiver na mão)
-        // Mas como passamos uLightPos, usamos a distância real:
-        vec3 L = normalize(-vWorldPos); 
+        vec3 L = normalize(-vWorldPos); // Vetor em direção à câmera/lanterna
         
         vec3 baseColor;
 
-        // 1. RECUPERAÇÃO DA COR ORIGINAL (Consertando o "Preto e Branco")
+        // 1. RECUPERAÇÃO DA COR ORIGINAL
         if (uIsKey == 1 || uUseMTLColor == 1) {
             baseColor = (length(vColor) > 0.01) ? vColor : vec3(0.6, 0.6, 0.6);
         } else {
+            // Mapeamento de textura baseado na normal (Triplanar simplificado)
             vec2 uv = (abs(N.x) > 0.5) ? vWorldPos.zy : vWorldPos.xz;
             baseColor = texture(uStoneTexture, uv * 2.0).rgb;
         }
 
-        // 2. MODELO DE PHONG (Ambient, Diffuse, Specular)
+        // 2. MODELO DE PHONG COM AJUSTES DE TERROR
         
-        // AMBIENT: Luz mínima para não ficar breu total
-        vec3 ambient = 0.1 * baseColor;
+        // AMBIENT: Reduzido drasticamente (de 0.1 para 0.02)
+        // Isso faz com que as áreas não iluminadas fiquem quase pretas.
+        vec3 ambient = 0.02 * baseColor;
 
-        // CÁLCULO DO CONE DA LANTERNA (Spotlight)
+        // CÁLCULO DO CONE DA LANTERNA
         float theta = dot(normalize(vWorldPos), vec3(0.0, 0.0, -1.0));
         
         vec3 diffuse = vec3(0.0);
         vec3 specular = vec3(0.0);
 
         if(theta > uCutOff) {
-            // DIFFUSE: A cor revelada pela lanterna
+            // DIFFUSE
             float diffFactor = max(dot(N, L), 0.0);
             diffuse = diffFactor * baseColor;
 
-            // SPECULAR: O brilho (Phong) - Essencial para Chaves e Esqueleto
-            vec3 V = normalize(-vWorldPos); // Vetor para o observador
-            vec3 R = reflect(-L, N);        // Vetor de reflexão
+            // SPECULAR (O brilho que seu professor pediu)
+            vec3 V = normalize(-vWorldPos); 
+            vec3 R = reflect(-L, N);
+            float specFactor = pow(max(dot(R, V), 0.0), 16.0); // Brilho mais "espalhado"
+            specular = vec3(0.4) * specFactor; 
             
-            float specFactor = pow(max(dot(R, V), 0.0), 32.0); // 32.0 é o brilho (shininess)
-            specular = vec3(0.5) * specFactor; // Brilho branco
-            
-            // Atenuação e Intensidade do Foco
+            // ATENUAÇÃO DE TERROR: Luz morre muito mais rápido
+            // Aumentamos os coeficientes para a luz não ir longe
             float dist = length(vWorldPos);
-            float attenuation = 1.0 / (1.0 + 0.2 * dist + 0.1 * (dist * dist));
-            float spotIntensity = clamp((theta - uCutOff) / 0.1, 0.0, 1.0);
+            float attenuation = 1.0 / (1.0 + 0.8 * dist + 1.2 * (dist * dist));
             
-            diffuse *= attenuation * spotIntensity * 2.0;
-            specular *= attenuation * spotIntensity * 2.0;
+            // Suavização da borda do círculo
+            float spotIntensity = clamp((theta - uCutOff) / 0.05, 0.0, 1.0);
+            
+            // Multiplicador final de brilho reduzido (de 2.0 para 1.3)
+            diffuse *= attenuation * spotIntensity * 1.3;
+            specular *= attenuation * spotIntensity * 1.3;
         }
 
-        // Combinação final: Ambient + Diffuse + Specular
+        // Combinação final
         vec3 finalColor = ambient + diffuse + specular;
 
-        // FOG (Nevoeiro de distância)
-        float fog = exp(-0.4 * length(vWorldPos));
+        // 3. NEVOEIRO (FOG) DENSO: A escuridão "engole" a luz a curta distância
+        // Mudamos de -0.4 para -0.9 para encurtar a visão
+        float fog = exp(-0.9 * length(vWorldPos));
+        
         fragColor = vec4(finalColor * fog, 1.0);
     }
 `;
