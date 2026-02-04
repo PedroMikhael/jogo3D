@@ -317,7 +317,7 @@ function renderizar() {
 
     gl.uniform3fv(uLightPos, [cameraX, cameraY, cameraZ]);
     gl.uniform3fv(uLightDir, [lightDirX, lightDirY, lightDirZ]);
-    gl.uniform1f(uCutOff, Math.cos(Math.PI / 10)); // Ângulo do foco da lanterna (18 graus)
+    gl.uniform1f(uCutOff, Math.cos(Math.PI / 6)); // Ângulo do foco da lanterna (18 graus)
 
     // Vetor "para cima" sempre é Y positivo
     const up = [0, 1, 0];
@@ -530,33 +530,33 @@ function renderizar() {
 
     // === RENDERIZAÇÃO DA LANTERNA (MÃO DO JOGADOR) ===
     if (lanternaBuffers) {
-    // 1. Limpa apenas a profundidade para a lanterna ficar "por cima" de tudo
-        gl.clear(gl.DEPTH_BUFFER_BIT);
+        gl.clear(gl.DEPTH_BUFFER_BIT); // Faz a lanterna ficar na frente de tudo
 
-        const modelMatrixLanterna = mat4.create();
+        const mMatrixMao = mat4.create();
 
-    // 2. Posicionamento FPS: 
-    // Primeiro levamos para a posição da câmera
-        mat4.translate(modelMatrixLanterna, modelMatrixLanterna, [cameraX, cameraY, cameraZ]);
+        // 1. BALANÇO SUAVE (Simula o personagem respirando/andando)
+        const bobbing = Math.sin(keyAnimationTime * 2.0) * 0.005;
+        const sway = Math.cos(keyAnimationTime * 1.0) * 0.005; 
+        
+        // 2. POSIÇÃO (Ajustado para o canto inferior direito como na imagem)
+        // [Eixo X (Direita), Eixo Y (Baixo), Eixo Z (Frente)]
+        mat4.translate(mMatrixMao, mMatrixMao, [0.35 + sway, -0.4 + bobbing, -0.7]);
 
-    // 3. Rotacionamos para seguir o olhar do jogador (Yaw e Pitch)
-        mat4.rotateY(modelMatrixLanterna, modelMatrixLanterna, cameraYaw);
-        mat4.rotateX(modelMatrixLanterna, modelMatrixLanterna, cameraPitch);
+        // 3. Rotação (caso o modelo venha virado para trás)
+        mat4.rotateY(mMatrixMao, mMatrixMao, -Math.PI / 8); // Inclina para o centro
+        mat4.rotateX(mMatrixMao, mMatrixMao, Math.PI / 2); // Inclina um pouco para cima
+        
+        // 4. ESCALA
+        mat4.scale(mMatrixMao, mMatrixMao, [0.025, 0.025, 0.025]);
 
-    // 4. Ajuste de "Mão": Movemos um pouco para a direita, para baixo e para frente
-    // Ajuste esses valores (0.15, -0.1, -0.2) se a lanterna sumir da tela
-        mat4.translate(modelMatrixLanterna, modelMatrixLanterna, [0.15, -0.1, -0.5]);
-
-    // 5. Escala da Lanterna (comece pequeno para não tapar a visão)
-        mat4.scale(modelMatrixLanterna, modelMatrixLanterna, [0.03, 0.03, 0.03]);
-
-        const mvLanterna = mat4.create();
-        mat4.multiply(mvLanterna, viewMatrix, modelMatrixLanterna);
-
-        gl.uniformMatrix4fv(uModelViewMatrix, false, mvLanterna);
-        gl.uniform1i(uUseMTLColor, 1); // Usa as cores do modelo da lanterna
+        // IMPORTANTE: Enviamos a matriz diretamente, sem multiplicar pela ViewMatrix
+        // Isso faz ela ignorar o movimento do mundo e ficar presa no seu nariz
+        gl.uniformMatrix4fv(uModelViewMatrix, false, mMatrixMao);
+        gl.uniform1i(uUseMTLColor, 1);
         desenharOBJComCores(gl, lanternaBuffers, shaderProgram);
     }
+
+     
 }
 
 window.onload = iniciaWebGL;
