@@ -50,7 +50,8 @@ const fsSource = `#version 300 es
 
     uniform vec3 uLightPos;   
     uniform vec3 uLightDir;   
-    uniform float uCutOff;    
+    uniform float uCutOff;
+    uniform float uLightIntensity;  
 
     out vec4 fragColor;
 
@@ -101,8 +102,8 @@ const fsSource = `#version 300 es
             float spotIntensity = clamp((theta - uCutOff) / 0.05, 0.0, 1.0);
             
             // Multiplicador final de brilho reduzido (de 2.0 para 1.3)
-            diffuse *= attenuation * spotIntensity * 1.3;
-            specular *= attenuation * spotIntensity * 1.3;
+            diffuse *= attenuation * spotIntensity * 1.5 * uLightIntensity;
+            specular *= attenuation * spotIntensity * 1.5 * uLightIntensity;
         }
 
         // Combinação final

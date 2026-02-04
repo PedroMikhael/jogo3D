@@ -310,6 +310,30 @@ function renderizar() {
     const lightDirY = Math.sin(cameraPitch);
     const lightDirZ = -Math.cos(cameraYaw) * Math.cos(cameraPitch);
 
+    // 1. Criar um efeito de oscilação (flicker)
+    // Usamos o tempo (keyAnimationTime) e um pouco de ruído aleatório
+    let flicker = 1.0;
+
+    // 1. Oscilação Nervosa: A luz treme o tempo todo (mais rápido agora: 30.0)
+    flicker = 0.85 + Math.sin(keyAnimationTime * 30.0) * 0.15;
+
+    // 2. Apagões Frequentes: Aumentamos a chance de falha para 10% (0.90)
+    // Antes estava 0.98 (2%). Agora em 10% dos frames a luz vai dar um susto.
+    if (Math.random() > 0.90) { 
+        // Cria um blackout quase total ou uma luz bem fraquinha
+        flicker *= Math.random() > 0.5 ? 0.1 : 0.4; 
+    }
+
+    // 3. Falha Crítica: Às vezes a luz "morre" por um coléssimo de segundo
+    if (Math.random() > 0.995) {
+        flicker = 0.0;
+    }
+
+    // 2. Enviar a intensidade para o Shader
+    // Se você não tiver esse uniform no shader ainda, vamos adicioná-lo abaixo
+    const uLightIntensity = gl.getUniformLocation(shaderProgram, "uLightIntensity");
+    gl.uniform1f(uLightIntensity, flicker);
+
     // Envie para o Shader (certifique-se de que os nomes batem com seu fsSource)
     const uLightPos = gl.getUniformLocation(shaderProgram, "uLightPos");
     const uLightDir = gl.getUniformLocation(shaderProgram, "uLightDir");
