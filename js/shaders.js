@@ -56,52 +56,52 @@ const fsSource = `#version 300 es
 
     void main() {
         vec3 N = normalize(vNormal);
-        vec3 L = normalize(-vWorldPos); // Direção para a lanterna (na câmera)
+        vec3 L = normalize(-vWorldPos); 
         
         vec3 baseColor;
 
-        // 1. DEFINIÇÃO DA COR (Aqui corrigimos o Preto e Branco)
+        // 1. COR DO OBJETO
         if (uUseMTLColor == 1) {
-            // Usa a cor vinda do arquivo .obj/.mtl (Chaves, Lanterna, Esqueleto)
             baseColor = vColor;
         } else {
-            // Mapeamento de Textura para Parede e Grama
-            // Criamos coordenadas UV baseadas na posição do mundo
+            // Mapeamento UV para paredes e chão
             vec2 uv = (abs(N.y) > 0.5) ? vWorldPos.xz : vWorldPos.xy;
-            
-            // Lemos a imagem 'stoneTexture' enviada pelo main.js
-            vec4 texColor = texture(uStoneTexture, uv * 1.5); 
-            baseColor = texColor.rgb;
+            baseColor = texture(uStoneTexture, uv * 1.5).rgb;
 
-            // Ajuste específico para a Grama: Se for grama, damos um tom esverdeado
             if (uIsGrass == 1) {
-                baseColor *= vec3(0.4, 0.8, 0.4); // Força um tom verde sobre a textura
+                // Multiplica a textura por um verde escuro de floresta
+                baseColor *= vec3(0.2, 0.5, 0.2); 
             }
         }
 
-        // 2. ILUMINAÇÃO DE PHONG
+        // 2. COR DA LUZ (Tom amarelado/quente de lanterna)
+        vec3 lightColor = vec3(1.0, 0.9, 0.6); // Luz levemente âmbar
+
+        // 3. ILUMINAÇÃO DE PHONG
         float theta = dot(normalize(vWorldPos), vec3(0.0, 0.0, -1.0));
         
-        // Luz ambiente (mínimo para não ser breu total)
-        vec3 ambient = 0.03 * baseColor;
+        // Ambient (Azulado bem escuro para simular a noite nas sombras)
+        vec3 ambient = vec3(0.01, 0.01, 0.02) * baseColor;
         vec3 diffuse = vec3(0.0);
 
         if(theta > uCutOff) {
             float diffFactor = max(dot(N, L), 0.0);
             
-            // Atenuação (Luz enfraquece com a distância)
             float dist = length(vWorldPos);
-            float attenuation = 1.0 / (1.0 + 0.7 * dist + 0.5 * (dist * dist));
+            // Atenuação ajustada para o clima de terror
+            float attenuation = 1.0 / (1.0 + 0.8 * dist + 1.0 * (dist * dist));
             
-            // Intensidade do Spot + Flicker
             float spotIntensity = clamp((theta - uCutOff) / 0.1, 0.0, 1.0);
             
-            diffuse = baseColor * diffFactor * attenuation * spotIntensity * 2.5 * uLightIntensity;
+            // Multiplicamos pela cor da luz (lightColor)
+            diffuse = baseColor * lightColor * diffFactor * attenuation * spotIntensity * 3.0 * uLightIntensity;
         }
 
-        // 3. RESULTADO FINAL + FOG
+        // 4. RESULTADO FINAL + FOG (Nevoeiro)
         vec3 finalColor = ambient + diffuse;
-        float fog = exp(-0.7 * length(vWorldPos));
+        
+        // Nevoeiro escuro
+        float fog = exp(-0.8 * length(vWorldPos));
         
         fragColor = vec4(finalColor * fog, 1.0);
     }
