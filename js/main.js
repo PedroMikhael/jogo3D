@@ -5,6 +5,7 @@ let mazeBuffers;
 let floorBuffers;
 let keyBuffers;
 let stoneTexture;  // Textura de pedra para as paredes
+let grassTexture; // Adicione se tiver uma imagem de grama, senão use stoneTexture
 let gravestoneBuffers;
 let bonesBuffers;
 // Novos modelos
@@ -290,69 +291,32 @@ function renderLoop() {
 }
 
 function renderizar() {
+    // 1. LIMPEZA E USO DO PROGRAMA
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
     gl.useProgram(shaderProgram);
 
-    // Câmera em primeira pessoa
-    // Posição do olho
+    // 2. CONFIGURAÇÃO DA CÂMERA (VIEW MATRIX)
     const eye = [cameraX, cameraY, cameraZ];
-
-    // Ponto para onde a câmera está olhando (baseado em yaw e pitch)
     const lookX = cameraX + Math.sin(cameraYaw) * Math.cos(cameraPitch);
     const lookY = cameraY + Math.sin(cameraPitch);
     const lookZ = cameraZ - Math.cos(cameraYaw) * Math.cos(cameraPitch);
     const center = [lookX, lookY, lookZ];
+    const up = [0, 1, 0];
+    const viewMatrix = lookAt(eye, center, up);
 
+    const aspect = gl.canvas.width / gl.canvas.height;
+    const projectionMatrix = perspective(Math.PI / 4, aspect, 0.1, 100.0);
 
-    // Vetor de direção para onde o jogador olha
-    const lightDirX = Math.sin(cameraYaw) * Math.cos(cameraPitch);
-    const lightDirY = Math.sin(cameraPitch);
-    const lightDirZ = -Math.cos(cameraYaw) * Math.cos(cameraPitch);
-
-    // 1. Criar um efeito de oscilação (flicker)
-    // Usamos o tempo (keyAnimationTime) e um pouco de ruído aleatório
-    let flicker = 1.0;
-
-    // 1. Oscilação Nervosa: A luz treme o tempo todo (mais rápido agora: 30.0)
-    flicker = 0.85 + Math.sin(keyAnimationTime * 30.0) * 0.15;
-
-    // 2. Apagões Frequentes: Aumentamos a chance de falha para 10% (0.90)
-    // Antes estava 0.98 (2%). Agora em 10% dos frames a luz vai dar um susto.
+    // 3. LÓGICA DO FLICKER (LANTERNA PISCANDO)
+    let flicker = 0.85 + Math.sin(keyAnimationTime * 30.0) * 0.15;
     if (Math.random() > 0.90) { 
-        // Cria um blackout quase total ou uma luz bem fraquinha
         flicker *= Math.random() > 0.5 ? 0.1 : 0.4; 
     }
-
-    // 3. Falha Crítica: Às vezes a luz "morre" por um coléssimo de segundo
     if (Math.random() > 0.995) {
         flicker = 0.0;
     }
 
-    // 2. Enviar a intensidade para o Shader
-    // Se você não tiver esse uniform no shader ainda, vamos adicioná-lo abaixo
-    const uLightIntensity = gl.getUniformLocation(shaderProgram, "uLightIntensity");
-    gl.uniform1f(uLightIntensity, flicker);
-
-    // Envie para o Shader (certifique-se de que os nomes batem com seu fsSource)
-    const uLightPos = gl.getUniformLocation(shaderProgram, "uLightPos");
-    const uLightDir = gl.getUniformLocation(shaderProgram, "uLightDir");
-    const uCutOff = gl.getUniformLocation(shaderProgram, "uCutOff");
-
-    gl.uniform3fv(uLightPos, [0.1, -0.1 , 0.0 ]);
-    gl.uniform3fv(uLightDir, [0.0, 0.0 , -1.0 ]);   
-    gl.uniform1f(uCutOff, Math.cos(Math.PI / 15)); // Ângulo do foco da lanterna (18 graus)
-
-    // Vetor "para cima" sempre é Y positivo
-    const up = [0, 1, 0];
-
-    const viewMatrix = lookAt(eye, center, up);
-
-    const aspect = gl.canvas.width / gl.canvas.height;
-    const fov = Math.PI / 4;
-    const projectionMatrix = perspective(fov, aspect, 0.1, 100.0);
-
-    // Localização dos uniforms
+    // 4. ENVIO DE UNIFORMS GLOBAIS (LUZ E MATRIZES)
     const uModelViewMatrix = gl.getUniformLocation(shaderProgram, "uModelViewMatrix");
     const uProjectionMatrix = gl.getUniformLocation(shaderProgram, "uProjectionMatrix");
     const uIsKey = gl.getUniformLocation(shaderProgram, "uIsKey");
@@ -360,227 +324,124 @@ function renderizar() {
     const uUseMTLColor = gl.getUniformLocation(shaderProgram, "uUseMTLColor");
     const uStoneTexture = gl.getUniformLocation(shaderProgram, "uStoneTexture");
     const uTime = gl.getUniformLocation(shaderProgram, "uTime");
+    const uLightIntensity = gl.getUniformLocation(shaderProgram, "uLightIntensity");
+    const uLightPos = gl.getUniformLocation(shaderProgram, "uLightPos");
+    const uLightDir = gl.getUniformLocation(shaderProgram, "uLightDir");
+    const uCutOff = gl.getUniformLocation(shaderProgram, "uCutOff");
 
     gl.uniformMatrix4fv(uProjectionMatrix, false, projectionMatrix);
+    gl.uniform1f(uTime, keyAnimationTime);
+    gl.uniform1f(uLightIntensity, flicker);
+    
+    // Configuração da Lanterna (Espaço da Câmera)
+    gl.uniform3fv(uLightPos, [0.1, -0.1, 0.0]);
+    gl.uniform3fv(uLightDir, [0.0, 0.0, -1.0]);
+    gl.uniform1f(uCutOff, Math.cos(Math.PI / 15));
 
-    // Passa o tempo para animação da grama
-    gl.uniform1f(uTime, keyAnimationTime);  // Reutiliza o tempo da animação das chaves
-
-    // Ativa a textura de pedra
+    // 5. ATIVAÇÃO DA TEXTURA (Se estiver carregada)
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, stoneTexture);
-    gl.uniform1i(uStoneTexture, 0);
-
-    // Desenha o chão (modelo Grass Patch)
-    // Posiciona EM CIMA do chão do labirinto - usando gl-matrix igual às chaves
-    const grassScale = 1;
-    const grassY = -0.06;
-
-    // Cria matriz model usando gl-matrix (igual às chaves)
-    const grassModelMatrix = mat4.create();
-    mat4.translate(grassModelMatrix, grassModelMatrix, [0, grassY, 0]);
-    mat4.scale(grassModelMatrix, grassModelMatrix, [grassScale, 0.1, grassScale]);
-
-    // Multiplica view * model
-    const grassModelViewMatrix = mat4.create();
-    mat4.multiply(grassModelViewMatrix, viewMatrix, grassModelMatrix);
-
-    gl.uniformMatrix4fv(uModelViewMatrix, false, grassModelViewMatrix);
-    gl.uniform1i(uIsGrass, 1);
-    gl.uniform1i(uIsKey, 0);
-    gl.uniform1i(uUseMTLColor, 0);
-    desenharOBJComCores(gl, floorBuffers, shaderProgram);
-
-    // Desenha o labirinto com textura de pedra (sem cores MTL)
-    gl.uniformMatrix4fv(uModelViewMatrix, false, viewMatrix);
-    gl.uniform1i(uIsGrass, 0);
-    gl.uniform1i(uIsKey, 0);
-    gl.uniform1i(uUseMTLColor, 0);  // Usar TEXTURA de pedra para labirinto
-    desenharOBJComCores(gl, mazeBuffers, shaderProgram);
-
-    // Desenha as 3 chaves nas posições estratégicas
-    gl.uniform1i(uIsGrass, 0);
-    gl.uniform1i(uIsKey, 1);
-    gl.uniform1i(uUseMTLColor, 1);  // Usar cores do MTL para chaves
-
-    // Atualiza animação das chaves
-    keyAnimationTime += 0.03;
-
-    // Escala fixa para as chaves
-    const keyScale = 0.08;
-
-    for (let i = 0; i < keyPositions.length; i++) {
-        const pos = keyPositions[i];
-
-        // Calcula o "pulo" - movimento vertical usando seno
-        const bounceHeight = 0.02;
-        const bounceSpeed = 3.0;
-        const bounce = Math.sin(keyAnimationTime * bounceSpeed + i * 2) * bounceHeight;
-
-        // Rotação contínua no eixo Y
-        const rotationAngle = keyAnimationTime * 2 + i * (Math.PI * 2 / 3);
-
-        // Cria matriz model com animação
-        const modelMatrix = mat4.create();
-
-        // 1. Translação para a posição (com bounce no Y)
-        mat4.translate(modelMatrix, modelMatrix, [pos.x, pos.y + bounce, pos.z]);
-
-        // 2. Rotação no eixo Y
-        mat4.rotateY(modelMatrix, modelMatrix, rotationAngle);
-
-        // 3. Escala
-        mat4.scale(modelMatrix, modelMatrix, [keyScale, keyScale, keyScale]);
-
-        // Multiplica view * model
-        const modelViewMatrix = mat4.create();
-        mat4.multiply(modelViewMatrix, viewMatrix, modelMatrix);
-
-        gl.uniformMatrix4fv(uModelViewMatrix, false, modelViewMatrix);
-        desenharOBJComCores(gl, keyBuffers, shaderProgram);
+    if (stoneTexture) {
+        gl.bindTexture(gl.TEXTURE_2D, stoneTexture);
+        gl.uniform1i(uStoneTexture, 0);
     }
 
-    gl.uniform1i(uIsGrass, 0);
+    // --- DESENHO DOS OBJETOS ---
+
+    // A. CHÃO (GRASS PATCH)
+    if (floorBuffers) {
+        const grassModelMatrix = mat4.create();
+        mat4.translate(grassModelMatrix, grassModelMatrix, [0, -0.06, 0]);
+        mat4.scale(grassModelMatrix, grassModelMatrix, [1.0, 0.1, 1.0]);
+        const grassMV = mat4.create();
+        mat4.multiply(grassMV, viewMatrix, grassModelMatrix);
+
+        gl.uniformMatrix4fv(uModelViewMatrix, false, grassMV);
+        gl.uniform1i(uIsGrass, 1);
+        gl.uniform1i(uIsKey, 0);
+        gl.uniform1i(uUseMTLColor, 0);
+        desenharOBJComCores(gl, floorBuffers, shaderProgram);
+    }
+
+    // B. LABIRINTO (MAZE)
+    if (mazeBuffers) {
+        gl.uniformMatrix4fv(uModelViewMatrix, false, viewMatrix);
+        gl.uniform1i(uIsGrass, 0);
+        gl.uniform1i(uIsKey, 0);
+        gl.uniform1i(uUseMTLColor, 0); // Usa Textura stoneTexture
+        desenharOBJComCores(gl, mazeBuffers, shaderProgram);
+    }
+
+    // C. CHAVES (COM ANIMAÇÃO)
+    keyAnimationTime += 0.03;
+    if (keyBuffers) {
+        gl.uniform1i(uIsGrass, 0);
+        gl.uniform1i(uIsKey, 1);
+        gl.uniform1i(uUseMTLColor, 1); // Usa cores do MTL
+        for (let i = 0; i < keyPositions.length; i++) {
+            const pos = keyPositions[i];
+            const bounce = Math.sin(keyAnimationTime * 3.0 + i * 2) * 0.02;
+            const modelMatrix = mat4.create();
+            mat4.translate(modelMatrix, modelMatrix, [pos.x, pos.y + bounce, pos.z]);
+            mat4.rotateY(modelMatrix, modelMatrix, keyAnimationTime * 2 + i);
+            mat4.scale(modelMatrix, modelMatrix, [0.08, 0.08, 0.08]);
+            const mvMatrix = mat4.create();
+            mat4.multiply(mvMatrix, viewMatrix, modelMatrix);
+            gl.uniformMatrix4fv(uModelViewMatrix, false, mvMatrix);
+            desenharOBJComCores(gl, keyBuffers, shaderProgram);
+        }
+    }
+
+    // D. MODELOS ESTÁTICOS (Lápides, Ossos, etc.)
     gl.uniform1i(uIsKey, 0);
     gl.uniform1i(uUseMTLColor, 1);
 
-    const gravestoneScale = 0.05; // Ajuste conforme o tamanho do modelo
-
-    if (gravestoneBuffers) {
-        for (const pos of gravestonesPositions) {
-            const modelMatrix = mat4.create();
-            // Translação
-            mat4.translate(modelMatrix, modelMatrix, [pos.x, pos.y, pos.z]);
-            // Escala
-            mat4.scale(modelMatrix, modelMatrix, [gravestoneScale, gravestoneScale, gravestoneScale]);
-
-            const modelViewMatrix = mat4.create();
-            mat4.multiply(modelViewMatrix, viewMatrix, modelMatrix);
-
-            gl.uniformMatrix4fv(uModelViewMatrix, false, modelViewMatrix);
-            desenharOBJComCores(gl, gravestoneBuffers, shaderProgram);
-        }
-    }
-
-    // --- Renderização dos Bones ---
-    if (bonesBuffers) {
-        for (const pos of bonesPositions) {
-            const modelMatrix = mat4.create();
-            mat4.translate(modelMatrix, modelMatrix, [pos.x, pos.y, pos.z]);
-            mat4.scale(modelMatrix, modelMatrix, [0.05, 0.05, 0.05]);
-            const modelViewMatrix = mat4.create();
-            mat4.multiply(modelViewMatrix, viewMatrix, modelMatrix);
-            gl.uniformMatrix4fv(uModelViewMatrix, false, modelViewMatrix);
-            desenharOBJComCores(gl, bonesBuffers, shaderProgram);
-        }
-    }
-
-    // --- Outros modelos ---
-    const defaultScale = 0.15;
-
-    // Anjo
-    if (angelBuffers) {
-        for (const pos of angelPositions) {
+    const renderStatic = (buffers, positions, scale, rotateY = 0) => {
+        if (!buffers) return;
+        for (const pos of positions) {
             const mm = mat4.create();
             mat4.translate(mm, mm, [pos.x, pos.y, pos.z]);
-            mat4.scale(mm, mm, [defaultScale, defaultScale, defaultScale]);
-            const mv = mat4.create(); mat4.multiply(mv, viewMatrix, mm);
+            if(rotateY !== 0) mat4.rotateY(mm, mm, rotateY);
+            mat4.scale(mm, mm, [scale, scale, scale]);
+            const mv = mat4.create();
+            mat4.multiply(mv, viewMatrix, mm);
             gl.uniformMatrix4fv(uModelViewMatrix, false, mv);
-            desenharOBJComCores(gl, angelBuffers, shaderProgram);
+            desenharOBJComCores(gl, buffers, shaderProgram);
         }
-    }
+    };
 
-    // Anubis
-    if (anubisBuffers) {
-        for (const pos of anubisPositions) {
-            const mm = mat4.create();
-            mat4.translate(mm, mm, [pos.x, pos.y, pos.z]);
-            mat4.scale(mm, mm, [defaultScale, defaultScale, defaultScale]);
-            const mv = mat4.create(); mat4.multiply(mv, viewMatrix, mm);
-            gl.uniformMatrix4fv(uModelViewMatrix, false, mv);
-            desenharOBJComCores(gl, anubisBuffers, shaderProgram);
-        }
-    }
+    renderStatic(gravestoneBuffers, gravestonesPositions, 0.05);
+    renderStatic(bonesBuffers, bonesPositions, 0.05);
+    renderStatic(angelBuffers, angelPositions, 0.15);
+    renderStatic(anubisBuffers, anubisPositions, 0.15);
+    renderStatic(treeBuffers, treePositions, 0.3);
+    renderStatic(skeletonBuffers, skeletonPositions, 0.12, Math.PI);
+    renderStatic(candelabraBuffers, candelabraPositions, 0.1);
 
-    // Arvore
-    if (treeBuffers) {
-        for (const pos of treePositions) {
-            const mm = mat4.create();
-            mat4.translate(mm, mm, [pos.x, pos.y, pos.z]);
-            mat4.scale(mm, mm, [0.3, 0.3, 0.3]);
-            const mv = mat4.create(); mat4.multiply(mv, viewMatrix, mm);
-            gl.uniformMatrix4fv(uModelViewMatrix, false, mv);
-            desenharOBJComCores(gl, treeBuffers, shaderProgram);
-        }
-    }
-
-    // Esqueleto
-    if (skeletonBuffers) {
-        for (const pos of skeletonPositions) {
-            const mm = mat4.create();
-            mat4.translate(mm, mm, [pos.x, pos.y, pos.z]);
-            // Reaplicando rotação e escala ajustada
-            mat4.rotateY(mm, mm, Math.PI);
-            mat4.scale(mm, mm, [0.12, 0.12, 0.12]);
-            const mv = mat4.create(); mat4.multiply(mv, viewMatrix, mm);
-            gl.uniformMatrix4fv(uModelViewMatrix, false, mv);
-            desenharOBJComCores(gl, skeletonBuffers, shaderProgram);
-        }
-    }
-
-    // Lua
-    if (moonBuffers && moonPosition) {
+    // E. LUA (IGNORA FOG SE QUISER QUE FIQUE BRILHANTE)
+    if (moonBuffers) {
         const mm = mat4.create();
         mat4.translate(mm, mm, [moonPosition.x, moonPosition.y, moonPosition.z]);
         mat4.scale(mm, mm, [0.5, 0.5, 0.5]);
-        mat4.rotateY(mm, mm, keyAnimationTime * 0.2);
-        const mv = mat4.create(); mat4.multiply(mv, viewMatrix, mm);
+        const mv = mat4.create();
+        mat4.multiply(mv, viewMatrix, mm);
         gl.uniformMatrix4fv(uModelViewMatrix, false, mv);
         desenharOBJComCores(gl, moonBuffers, shaderProgram);
     }
 
-    // Candelabro
-    if (candelabraBuffers) {
-        for (const pos of candelabraPositions) {
-            const mm = mat4.create();
-            mat4.translate(mm, mm, [pos.x, pos.y, pos.z]);
-            mat4.scale(mm, mm, [0.1, 0.1, 0.1]);
-            const mv = mat4.create(); mat4.multiply(mv, viewMatrix, mm);
-            gl.uniformMatrix4fv(uModelViewMatrix, false, mv);
-            desenharOBJComCores(gl, candelabraBuffers, shaderProgram);
-        }
-    }
-
-
-    // === RENDERIZAÇÃO DA LANTERNA (MÃO DO JOGADOR) ===
+    // F. LANTERNA (MÃO DO JOGADOR)
     if (lanternaBuffers) {
-        gl.clear(gl.DEPTH_BUFFER_BIT); // Faz a lanterna ficar na frente de tudo
-
+        gl.clear(gl.DEPTH_BUFFER_BIT); 
+        const bob = Math.sin(keyAnimationTime * 2.0) * 0.005;
         const mMatrixMao = mat4.create();
-
-        // 1. BALANÇO SUAVE (Simula o personagem respirando/andando)
-        const bobbing = Math.sin(keyAnimationTime * 2.0) * 0.005;
-        const sway = Math.cos(keyAnimationTime * 1.0) * 0.005; 
-        
-        // 2. POSIÇÃO (Ajustado para o canto inferior direito como na imagem)
-        // [Eixo X (Direita), Eixo Y (Baixo), Eixo Z (Frente)]
-        mat4.translate(mMatrixMao, mMatrixMao, [0.35 + sway, -0.4 + bobbing, -0.7]);
-
-        // 3. Rotação (caso o modelo venha virado para trás)
-        mat4.rotateY(mMatrixMao, mMatrixMao, -Math.PI / 8); // Inclina para o centro
-        mat4.rotateX(mMatrixMao, mMatrixMao, Math.PI / 2); // Inclina um pouco para cima
-        
-        // 4. ESCALA
+        mat4.translate(mMatrixMao, mMatrixMao, [0.35, -0.4 + bob, -0.7]);
+        mat4.rotateY(mMatrixMao, mMatrixMao, -Math.PI / 8);
+        mat4.rotateX(mMatrixMao, mMatrixMao, Math.PI / 2);
         mat4.scale(mMatrixMao, mMatrixMao, [0.025, 0.025, 0.025]);
 
-        // IMPORTANTE: Enviamos a matriz diretamente, sem multiplicar pela ViewMatrix
-        // Isso faz ela ignorar o movimento do mundo e ficar presa no seu nariz
         gl.uniformMatrix4fv(uModelViewMatrix, false, mMatrixMao);
         gl.uniform1i(uUseMTLColor, 1);
         desenharOBJComCores(gl, lanternaBuffers, shaderProgram);
     }
-
-     
 }
 
 window.onload = iniciaWebGL;
