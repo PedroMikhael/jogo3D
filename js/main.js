@@ -129,7 +129,7 @@ function renderizar() {
     gl.uniformMatrix4fv(uProjectionMatrix, false, projectionMatrix);
     gl.uniform1f(uTime, keyAnimationTime);
     gl.uniform1f(uLightIntensity, flicker);
-    gl.uniform1f(uCutOff, Math.cos(Math.PI / 12));
+    gl.uniform1f(uCutOff, Math.cos(Math.PI / 15));
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, stoneTexture);

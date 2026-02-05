@@ -35,13 +35,13 @@ const fsSource = `#version 300 es
 
     in vec3 vNormal;
     in vec3 vViewPos;
-    in vec3 vWorldPos; // Recebe a posição fixa do mapa
+    in vec3 vWorldPos;
     in vec3 vColor;
     
     uniform highp int uUseMTLColor;
     uniform sampler2D uStoneTexture;
     uniform float uLightIntensity;
-    uniform float uCutOff;
+    uniform float uCutOff; // Controlado pelo Math.cos no main.js
     uniform float uTime;
 
     out vec4 fragColor;
@@ -52,40 +52,60 @@ const fsSource = `#version 300 es
         vec3 V = normalize(-vViewPos);
         
         vec3 baseColor;
-        if (uUseMTLColor == 1) {
-            baseColor = vColor;
+        bool isObject = (uUseMTLColor == 1);
+
+        // 1. COR BASE
+        if (isObject) {
+            // Se a cor do MTL falhar, usa amarelo, senão usa a vColor
+            baseColor = (length(vColor) < 0.1) ? vec3(0.8, 0.7, 0.2) : vColor;
         } else {
-            // Textura baseada na posição do mundo para não "deslizar"
             vec2 uv = (abs(N.y) > 0.5) ? vWorldPos.xz : vWorldPos.xy;
             baseColor = texture(uStoneTexture, uv * 1.5).rgb;
         }
 
-        // --- POÇA DE SANGUE FIXA NO MAPA ---
-        // Agora usamos vWorldPos. Se as coordenadas do seu mapa forem pequenas,
-        // ajuste os valores (0.2, -0.3) para onde você quer que a poça fique.
+        // 2. POÇA DE SANGUE (Fixa e discreta)
         float distPoca = length(vWorldPos.xz - vec2(0.2, -0.3)); 
-        
-        if (uUseMTLColor == 0 && N.y > 0.8 && distPoca < 0.5) {
-            // Efeito de movimento suave no sangue
-            float wave = sin(vWorldPos.x * 15.0 + uTime * 2.0) * 0.01;
-            baseColor = vec3(0.2, 0.0, 0.0); // Vermelho escuro fixo
+        if (!isObject && N.y > 0.8 && distPoca < 0.5) {
+            baseColor = vec3(0.2, 0.0, 0.0);
         }
 
-        // --- ILUMINAÇÃO ---
-        vec3 lightColor = vec3(1.0, 0.9, 0.6);
-        vec3 ambient = 0.15 * baseColor;
+        // 3. ILUMINAÇÃO DE TERROR
+        vec3 lightColor = vec3(1.0, 0.9, 0.7);
+        
+        // AMBIENTE: Quase zero para manter o terror
+        vec3 ambient = 0.05 * baseColor; 
+
+        // DIFUSA E ESPECULAR
         float diff = max(dot(N, L), 0.0);
         vec3 diffuse = baseColor * lightColor * diff;
-
-        // Lanterna
-        float dist = length(vViewPos);
-        float attenuation = 1.0 / (1.0 + 0.4 * dist + 0.6 * (dist * dist));
-        float theta = dot(normalize(vViewPos), vec3(0.0, 0.0, -1.0));
-        float intensity = smoothstep(uCutOff - 0.05, uCutOff + 0.05, theta);
-
-        vec3 finalColor = ambient + (diffuse * intensity * attenuation * 5.0 * uLightIntensity);
         
-        float fogFactor = exp(-0.8 * dist);
+        vec3 R = reflect(-L, N);
+        float spec = pow(max(dot(R, V), 0.0), 32.0);
+        vec3 specular = lightColor * spec * (isObject ? 0.8 : 0.2);
+
+        // 4. FOCO DA LANTERNA (O "CORTE" SECO)
+        float dist = length(vViewPos);
+        // Atenuação: a luz some rápido no escuro
+        float attenuation = 1.0 / (1.0 + 0.8 * dist + 1.5 * (dist * dist));
+        
+        float theta = dot(normalize(vViewPos), vec3(0.0, 0.0, -1.0));
+        
+        // Intensity: Se theta for menor que uCutOff, fica escuro. 
+        // Reduzi o epsilon para 0.05 para a borda ficar mais nítida
+        float intensity = clamp((theta - uCutOff) / 0.05, 0.0, 1.0);
+
+        // 5. COMBINAÇÃO FINAL
+        // Aumentamos o brilho da DIFUSA apenas no foco da lanterna
+        vec3 lighting = (diffuse + specular) * intensity * attenuation * 7.0 * uLightIntensity;
+        
+        // O Ambiente agora é afetado pela lanterna também (OPCIONAL)
+        // Se quiser breu total fora do círculo, multiplique ambient por intensity:
+        vec3 finalColor = (ambient * 0.5) + lighting;
+        
+        // FOG: Essencial para o clima de terror
+        float fogFactor = exp(-1.2 * dist); // Fog mais denso
+        
         fragColor = vec4(finalColor * fogFactor, 1.0);
     }
 `;
+
