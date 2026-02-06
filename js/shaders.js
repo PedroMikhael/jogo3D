@@ -51,6 +51,7 @@ const fsSource = `#version 300 es
     uniform int uIsKey;
     uniform int uIsGrass;
     uniform int uUseMTLColor;
+    uniform int uIsRoomObject;  // Objetos do quarto (não usar textura de pedra)
     uniform float uTime;
     uniform sampler2D uStoneTexture;
     
@@ -123,6 +124,17 @@ const fsSource = `#version 300 es
             grassColor += vec3(specular * 0.1);
             
             fragColor = vec4(grassColor, 1.0);
+            
+        } else if (uIsRoomObject == 1) {
+            // Objetos do quarto - cor do MTL ou cor padrão cinza claro
+            vec3 roomColor;
+            if (length(vColor) > 0.01) {
+                roomColor = vColor;
+            } else {
+                roomColor = vec3(0.9, 0.9, 0.9);  // Branco/cinza claro padrão
+            }
+            roomColor *= lightIntensity;
+            fragColor = vec4(roomColor, 1.0);
             
         } else if (uUseMTLColor == 1 && length(vColor) > 0.01) {
             vec3 mtlColor = vColor * lightIntensity;

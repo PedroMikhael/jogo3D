@@ -29,11 +29,137 @@
             border-radius: 5px;
             z-index: 100;
         }
+
+        #instructions {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            max-width: 600px;
+            background: rgba(10, 10, 15, 0.95);
+            color: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.8), 0 0 15px rgba(100, 100, 255, 0.2);
+            text-align: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+
+        #instructions h1 {
+            margin: 0 0 10px 0;
+            color: #aaddff;
+            text-shadow: 0 0 10px rgba(0, 150, 255, 0.5);
+            font-size: 2.5em;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        #instructions p {
+            font-size: 1.1em;
+            line-height: 1.6;
+            color: #ccc;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .key-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .key {
+            background: #333;
+            border: 1px solid #555;
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-weight: bold;
+            box-shadow: 0 2px 0 #111;
+            color: #fff;
+        }
+
+        .action {
+            font-size: 0.9em;
+            color: #aaa;
+        }
+
+        .start-btn {
+            background: linear-gradient(to right, #2563eb, #3b82f6);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .start-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(37, 99, 235, 0.6);
+        }
+
+        .hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
     </style>
 </head>
 
 <body>
     <div id="coords">X: 0 | Y: 0 | Z: 0</div>
+
+    <div id="instructions">
+        <h1>Labirinto 3D</h1>
+        <p>Você está preso em um labirinto antigo. Encontre a saída antes que seja tarde demais!</p>
+
+        <div
+            style="margin: 10px 0; border-top: 1px solid rgba(255,255,255,0.1); border-bottom: 1px solid rgba(255,255,255,0.1); padding: 10px;">
+            <strong style="color: #ffaa00; font-size: 1.2em;">OBJETIVO: ENCONTRE AS 3 CHAVES</strong>
+        </div>
+
+        <div class="controls">
+            <div class="key-group">
+                <span class="key">WASD</span>
+                <span class="action">Mover</span>
+            </div>
+            <div class="key-group">
+                <span class="key">MOUSE</span>
+                <span class="action">Olhar</span>
+            </div>
+            <div class="key-group">
+                <span class="key">F</span>
+                <span class="action">Lanterna</span>
+            </div>
+        </div>
+
+        <p style="font-size: 0.9em; color: #888;">Dica: Algumas paredes podem esconder segredos...</p>
+
+        <button class="start-btn" onclick="startGame()">ENTRAR NO LABIRINTO</button>
+    </div>
+
     <canvas id="meuCanvas"></canvas>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
