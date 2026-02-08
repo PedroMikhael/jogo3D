@@ -1,17 +1,13 @@
 /**
- * Módulo de carregamento de texturas (baseado no código do professor)
- * Carrega imagens e envia para a GPU como texturas WebGL
+ * Módulo de carregamento de texturas
+ * Consolida as melhorias da branch 'main' com a estrutura da 'mapa'
  */
 
-// Array de imagens carregadas (padrão do professor)
 var texImages = [];
 var loadedTexCount = 0;
 
 /**
- * Carrega múltiplas texturas e chama callback quando todas estiverem prontas
- * (Padrão do professor)
- * @param {string[]} texSources - Array de URLs das texturas
- * @param {function} onAllLoaded - Callback chamado quando todas carregarem
+ * Carrega múltiplas texturas (Padrão do professor)
  */
 function loadTexturesFromSources(texSources, onAllLoaded) {
     loadedTexCount = 0;
@@ -34,34 +30,32 @@ function loadTexturesFromSources(texSources, onAllLoaded) {
 }
 
 /**
- * Envia uma imagem para a GPU como textura (padrão do professor)
- * @param {WebGLRenderingContext} gl - Contexto WebGL
- * @param {Image} image - Imagem carregada
- * @param {number} textureUnit - Unidade de textura (0, 1, 2, etc.)
- * @returns {WebGLTexture} - Textura criada
+ * Envia uma imagem para a GPU como textura 
+ * IMPORTANTE: Usa configurações da branch MAIN (MIPMAP + REPEAT)
  */
 function createTextureFromImage(gl, image, textureUnit) {
     var tex = gl.createTexture();
     gl.activeTexture(gl.TEXTURE0 + textureUnit);
     gl.bindTexture(gl.TEXTURE_2D, tex);
 
-    // Configuração de parâmetros (estilo do professor)
+    // Garante que a textura repita sem distorção
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    
+    // Filtro LINEAR_MIPMAP_LINEAR remove o pixelado de longe
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-    // Envia imagem para a GPU
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-    gl.generateMipmap(gl.TEXTURE_2D); // Essencial para texturas de chão/parede
+    
+    // ESSENCIAL: Gera as versões menores da imagem para suavizar
+    gl.generateMipmap(gl.TEXTURE_2D); 
 
     return tex;
 }
 
 /**
- * Configura textura para repetir (tiling) - útil para paredes
- * @param {WebGLRenderingContext} gl - Contexto WebGL
- * @param {WebGLTexture} texture - Textura a configurar
+ * Força a repetição da textura (útil para atualizar texturas existentes)
  */
 function setTextureRepeat(gl, texture) {
     gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -70,10 +64,7 @@ function setTextureRepeat(gl, texture) {
 }
 
 /**
- * Carrega uma imagem e cria uma textura WebGL (versão async/await)
- * @param {WebGLRenderingContext} gl - Contexto WebGL
- * @param {string} url - URL da imagem
- * @returns {Promise<WebGLTexture>} - Textura WebGL
+ * Carrega uma imagem e cria uma textura WebGL (Versão moderna Async)
  */
 async function carregarTextura(gl, url) {
     return new Promise((resolve, reject) => {
@@ -82,10 +73,7 @@ async function carregarTextura(gl, url) {
 
         image.onload = () => {
             const texture = createTextureFromImage(gl, image, 0);
-
-            // Configura para repetir (útil para paredes)
             setTextureRepeat(gl, texture);
-
             console.log(`Textura carregada: ${url} (${image.width}x${image.height})`);
             resolve(texture);
         };
@@ -100,7 +88,7 @@ async function carregarTextura(gl, url) {
 }
 
 /**
- * Verifica se um número é potência de 2
+ * Verifica se um número é potência de 2 (Otimização de GPU)
  */
 function isPowerOf2(value) {
     return (value & (value - 1)) === 0;

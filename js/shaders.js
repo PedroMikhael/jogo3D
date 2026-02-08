@@ -1,3 +1,8 @@
+/**
+ * js/shaders.js
+ * Versão Corrigida: Mapeamento Triplanar para evitar esticamento + Luz Ambiente Global
+ */
+
 const vsSource = `#version 300 es
     precision highp float;
 
@@ -7,105 +12,114 @@ const vsSource = `#version 300 es
     
     uniform mat4 uModelViewMatrix;
     uniform mat4 uProjectionMatrix;
-    uniform mat4 uModelMatrix; // <--- NOVA UNIFORM: Posição do objeto no mundo
+    uniform float uTime;
+    uniform int uIsGrass;
 
     out vec3 vNormal;
     out vec3 vViewPos;
-    out vec3 vWorldPos; // <--- NOVA OUT: Posição real no mapa
+    out vec3 vWorldPos;
     out vec3 vColor;
 
     void main() {
-        vColor = aVertexColor;
-        vNormal = normalize(mat3(uModelViewMatrix) * aVertexNormal);
+        vec4 pos = aVertexPosition;
         
-        vec4 viewPos = uModelViewMatrix * aVertexPosition;
-        vViewPos = viewPos.xyz; 
-        
-        // Calcula a posição absoluta no mundo (independente da câmera)
-        // Se você não tiver uModelMatrix, usaremos uma alternativa no JS
-        vWorldPos = aVertexPosition.xyz; 
+        if (uIsGrass == 1 && pos.y > 0.0) {
+            float windX = sin(uTime * 2.0 + pos.x * 3.0) * 0.03 * pos.y;
+            pos.x += windX;
+        }
 
+        vec4 viewPos = uModelViewMatrix * pos;
+        vViewPos = viewPos.xyz;
+        vWorldPos = aVertexPosition.xyz;
+        
+        vNormal = mat3(uModelViewMatrix) * aVertexNormal;
+        vColor = aVertexColor;
+        
         gl_Position = uProjectionMatrix * viewPos;
     }
 `;
 
 const fsSource = `#version 300 es
     precision highp float;
-    precision highp int;
 
     in vec3 vNormal;
     in vec3 vViewPos;
     in vec3 vWorldPos;
     in vec3 vColor;
     
-    uniform highp int uUseMTLColor;
+    uniform int uIsKey;
+    uniform int uUseMTLColor;
+    uniform int uIsRoomObject;
     uniform sampler2D uStoneTexture;
-    uniform float uLightIntensity;
-    uniform float uCutOff; // Controlado pelo Math.cos no main.js
-    uniform float uTime;
+    uniform float uLightIntensity; 
+    uniform float uCutOff;
 
     out vec4 fragColor;
-
+    
     void main() {
         vec3 N = normalize(vNormal);
-        vec3 L = normalize(-vViewPos); 
         vec3 V = normalize(-vViewPos);
+        vec3 L = V; 
         
-        vec3 baseColor;
-        bool isObject = (uUseMTLColor == 1);
+        // --- LANTERNA SUAVE (CONE) ---
+        vec3 cameraDir = vec3(0.0, 0.0, -1.0);
+        float theta = dot(normalize(vViewPos), cameraDir);
+        float intensity = smoothstep(uCutOff - 0.12, uCutOff, theta);
 
-        // 1. COR BASE
-        if (isObject) {
-            // Se a cor do MTL falhar, usa amarelo, senão usa a vColor
-            baseColor = (length(vColor) < 0.1) ? vec3(0.8, 0.7, 0.2) : vColor;
-        } else {
-            vec2 uv = (abs(N.y) > 0.5) ? vWorldPos.xz : vWorldPos.xy;
-            baseColor = texture(uStoneTexture, uv * 1.5).rgb;
-        }
-
-        // 2. POÇA DE SANGUE (Fixa e discreta)
-        float distPoca = length(vWorldPos.xz - vec2(0.2, -0.3)); 
-        if (!isObject && N.y > 0.8 && distPoca < 0.5) {
-            baseColor = vec3(0.2, 0.0, 0.0);
-        }
-
-        // 3. ILUMINAÇÃO DE TERROR
-        vec3 lightColor = vec3(1.0, 0.9, 0.7);
-        
-        // AMBIENTE: Quase zero para manter o terror
-        vec3 ambient = 0.05 * baseColor; 
-
-        // DIFUSA E ESPECULAR
+        // --- ILUMINAÇÃO DE PHONG (AJUSTADA PARA NÃO SER TÃO BRANCA) ---
         float diff = max(dot(N, L), 0.0);
-        vec3 diffuse = baseColor * lightColor * diff;
         
+        // Luz amarelada/incandescente para não ser um branco puro "chapado"
+        vec3 lightColor = vec3(1.0, 0.98, 0.9); 
+        
+        // Especular (reflexo) muito mais suave
         vec3 R = reflect(-L, N);
-        float spec = pow(max(dot(R, V), 0.0), 32.0);
-        vec3 specular = lightColor * spec * (isObject ? 0.8 : 0.2);
+        float spec = pow(max(dot(R, V), 0.0), 8.0);
+// float ks = 0.15; (Removido para usar valor dinâmico abaixo)
 
-        // 4. FOCO DA LANTERNA (O "CORTE" SECO)
+        // --- TEXTURA TRIPLANAR BLINDADA (CORRIGE O ESTICAMENTO) ---
+        vec3 baseColor;
+        if (uUseMTLColor == 1 || uIsKey == 1 || uIsRoomObject == 1) {
+            baseColor = (length(vColor) < 0.01) ? vec3(0.8) : vColor;
+        } else {
+            // Escala da textura (Aumentado para 2.0 para melhorar a resolução percebida)
+            float scale = 2.0; 
+            
+            // Calcula o peso de cada face baseado na inclinação
+            vec3 blending = abs(N);
+            blending = normalize(max(blending, 0.00001)); 
+            float bSum = blending.x + blending.y + blending.z;
+            blending /= bSum;
+
+            // Projeções nos 3 eixos (ignora a UV do arquivo e usa o espaço 3D real)
+            vec3 xTex = texture(uStoneTexture, vWorldPos.zy * scale).rgb;
+            vec3 yTex = texture(uStoneTexture, vWorldPos.xz * scale).rgb;
+            vec3 zTex = texture(uStoneTexture, vWorldPos.xy * scale).rgb;
+
+            baseColor = xTex * blending.x + yTex * blending.y + zTex * blending.z;
+            
+            // Sangue
+            float distPoca = length(vWorldPos.xz - vec2(0.2, -0.3)); 
+            if (N.y > 0.5 && distPoca < 0.4) baseColor = vec3(0.25, 0.0, 0.0);
+        }
+
+        // --- COMPOSIÇÃO FINAL ---
         float dist = length(vViewPos);
-        // Atenuação: a luz some rápido no escuro
-        float attenuation = 1.0 / (1.0 + 0.8 * dist + 1.5 * (dist * dist));
+        float attenuation = 1.0 / (1.0 + 0.25 * dist + 0.15 * (dist * dist));
         
-        float theta = dot(normalize(vViewPos), vec3(0.0, 0.0, -1.0));
+        float ka = (uIsRoomObject == 1) ? 0.35 : 0.07; 
+        vec3 ambient = baseColor * ka;
         
-        // Intensity: Se theta for menor que uCutOff, fica escuro. 
-        // Reduzi o epsilon para 0.05 para a borda ficar mais nítida
-        float intensity = clamp((theta - uCutOff) / 0.05, 0.0, 1.0);
-
-        // 5. COMBINAÇÃO FINAL
-        // Aumentamos o brilho da DIFUSA apenas no foco da lanterna
-        vec3 lighting = (diffuse + specular) * intensity * attenuation * 7.0 * uLightIntensity;
+        // Lanterna agora aplica a cor 'lightColor' suave
+        vec3 diffuse = baseColor * diff * lightColor;
         
-        // O Ambiente agora é afetado pela lanterna também (OPCIONAL)
-        // Se quiser breu total fora do círculo, multiplique ambient por intensity:
-        vec3 finalColor = (ambient * 0.5) + lighting;
+        // [FIX] Reduz o brilho especular nas paredes para evitar o efeito "plástico/estourado"
+        // Se for objeto do quarto mantém 0.15, se for parede diminui para 0.02
+        float ks = (uIsRoomObject == 1) ? 0.15 : 0.02;
+        vec3 specular = vec3(1.0) * spec * ks;
         
-        // FOG: Essencial para o clima de terror
-        float fogFactor = exp(-1.2 * dist); // Fog mais denso
+        vec3 combinedLight = ambient + (diffuse + specular) * intensity * attenuation * 3.5 * uLightIntensity;
         
-        fragColor = vec4(finalColor * fogFactor, 1.0);
+        fragColor = vec4(combinedLight, 1.0);
     }
 `;
-

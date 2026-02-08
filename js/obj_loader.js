@@ -39,9 +39,21 @@ async function carregarOBJComMTL(objUrl) {
     // Carrega o MTL se encontrado
     let materials = {};
     if (mtlFile) {
-        const mtlUrl = baseUrl + mtlFile;
+        // CORREÇÃO: Encode URI component para lidar com espaços (Room empty)
+        const encodedMtlFile = encodeURIComponent(mtlFile);
+        const mtlUrl = baseUrl + mtlFile; // O browser lida com espaços na URL geralmente, mas...
+
         console.log(`Carregando MTL: ${mtlUrl}`);
-        materials = await carregarMTL(mtlUrl);
+        try {
+            materials = await carregarMTL(mtlUrl);
+            if (Object.keys(materials).length === 0) {
+                console.error(`AVISO CRÍTICO: Arquivo MTL ${mtlUrl} carregou mas não retornou materiais!`);
+            } else {
+                console.log(`Sucesso: ${mtlUrl} carregou ${Object.keys(materials).length} materiais.`);
+            }
+        } catch (e) {
+            console.error(`ERRO FATAL ao carregar MTL: ${mtlUrl}`, e);
+        }
     }
 
     // Parseia o OBJ com suporte a materiais
@@ -73,60 +85,39 @@ function normalizarModelo(modelo) {
     const vertices = modelo.vertices;
     const numVertices = vertices.length / 3;
 
-    // Encontra os limites do modelo (bounding box)
     let minX = Infinity, minY = Infinity, minZ = Infinity;
     let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
 
     for (let i = 0; i < numVertices; i++) {
-        const x = vertices[i * 3];
-        const y = vertices[i * 3 + 1];
-        const z = vertices[i * 3 + 2];
-
-        minX = Math.min(minX, x);
-        minY = Math.min(minY, y);
-        minZ = Math.min(minZ, z);
-        maxX = Math.max(maxX, x);
-        maxY = Math.max(maxY, y);
-        maxZ = Math.max(maxZ, z);
+        minX = Math.min(minX, vertices[i * 3]);
+        minY = Math.min(minY, vertices[i * 3 + 1]);
+        minZ = Math.min(minZ, vertices[i * 3 + 2]);
+        maxX = Math.max(maxX, vertices[i * 3]);
+        maxY = Math.max(maxY, vertices[i * 3 + 1]);
+        maxZ = Math.max(maxZ, vertices[i * 3 + 2]);
     }
 
-    // Calcula o centro e o tamanho do modelo
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
     const centerZ = (minZ + maxZ) / 2;
-
-    const sizeX = maxX - minX;
-    const sizeY = maxY - minY;
-    const sizeZ = maxZ - minZ;
-    const maxSize = Math.max(sizeX, sizeY, sizeZ);
-
-    // Fator de escala para caber em um cubo de -0.5 a 0.5 (tamanho 1)
+    const maxSize = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
     const scaleFactor = maxSize > 0 ? 1.0 / maxSize : 1.0;
 
-    // Cria novo array de vértices normalizados
     const normalizedVertices = new Float32Array(vertices.length);
-
     for (let i = 0; i < numVertices; i++) {
-        // Centraliza e escala
         normalizedVertices[i * 3] = (vertices[i * 3] - centerX) * scaleFactor;
         normalizedVertices[i * 3 + 1] = (vertices[i * 3 + 1] - centerY) * scaleFactor;
         normalizedVertices[i * 3 + 2] = (vertices[i * 3 + 2] - centerZ) * scaleFactor;
     }
 
-    console.log(`Modelo normalizado: centro original (${centerX.toFixed(2)}, ${centerY.toFixed(2)}, ${centerZ.toFixed(2)}), tamanho ${maxSize.toFixed(2)}, escala ${scaleFactor.toFixed(4)}`);
-
     return {
         vertices: normalizedVertices,
         normais: modelo.normais,
         texturas: modelo.texturas,
+        cores: modelo.cores, // <--- LINHA VITAL ADICIONADA: REPASSA AS CORES DO MTL
         indices: modelo.indices,
         numVertices: modelo.numVertices,
-        numFaces: modelo.numFaces,
-        // Informações extras sobre a normalização
-        originalBounds: { minX, minY, minZ, maxX, maxY, maxZ },
-        originalCenter: { x: centerX, y: centerY, z: centerZ },
-        originalSize: maxSize,
-        scaleFactor: scaleFactor
+        numFaces: modelo.numFaces
     };
 }
 
