@@ -16,14 +16,13 @@ const vsSource = `#version 300 es
 
     void main() {
         vColor = aVertexColor;
-        vNormal = normalize(mat3(uModelViewMatrix) * aVertexNormal);
+        vNormal = normalize(mat3(uModelMatrix) * aVertexNormal); // Normal deve usar Model Matrix para rotação correta no mundo
         
         vec4 viewPos = uModelViewMatrix * aVertexPosition;
         vViewPos = viewPos.xyz; 
         
         // Calcula a posição absoluta no mundo (independente da câmera)
-        // Se você não tiver uModelMatrix, usaremos uma alternativa no JS
-        vWorldPos = aVertexPosition.xyz; 
+        vWorldPos = (uModelMatrix * aVertexPosition).xyz; 
 
         gl_Position = uProjectionMatrix * viewPos;
     }
@@ -59,7 +58,21 @@ const fsSource = `#version 300 es
             // Se a cor do MTL falhar, usa amarelo, senão usa a vColor
             baseColor = (length(vColor) < 0.1) ? vec3(0.8, 0.7, 0.2) : vColor;
         } else {
-            vec2 uv = (abs(N.y) > 0.5) ? vWorldPos.xz : vWorldPos.xy;
+            // Triplanar Mapping Simplificado (Escolhe o plano dominante)
+            vec3 absN = abs(N);
+            vec2 uv;
+            
+            if (absN.y > absN.x && absN.y > absN.z) {
+                // CHÃO / TETO (Y dominante) -> Usa XZ
+                uv = vWorldPos.xz;
+            } else if (absN.x > absN.z) {
+                // PAREDES LATERAIS (X dominante) -> Usa ZY
+                uv = vWorldPos.zy;
+            } else {
+                // PAREDES FRENTE/TRÁS (Z dominante) -> Usa XY
+                uv = vWorldPos.xy;
+            }
+            
             baseColor = texture(uStoneTexture, uv * 1.5).rgb;
         }
 

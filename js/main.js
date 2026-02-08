@@ -81,7 +81,7 @@ async function iniciaWebGL() {
         skeletonBuffers = criarBuffersOBJComCores(gl, normalizarModelo(await carregarOBJComMTL('modelos/Skeleton/model.obj')));
         moonBuffers = criarBuffersOBJComCores(gl, normalizarModelo(await carregarOBJComMTL('modelos/Moon/model.obj')));
         candelabraBuffers = criarBuffersOBJComCores(gl, normalizarModelo(await carregarOBJComMTL('modelos/Simple Candelabra/model.obj')));
-        
+
         stoneTexture = await carregarTextura(gl, 'modelos/img_dark_stone.jpg');
 
         initControls();
@@ -113,13 +113,14 @@ function renderizar() {
     // Se estiver perto do esqueleto, a lanterna falha mais
     let distAoEsqueleto = Math.sqrt(Math.pow(cameraX - 0.14, 2) + Math.pow(cameraZ - 0.30, 2));
     let flickerRange = distAoEsqueleto < 0.3 ? 0.4 : 0.15;
-    
+
     let flicker = 0.85 + Math.sin(keyAnimationTime * 40.0) * flickerRange;
     if (distAoEsqueleto < 0.25 && Math.random() > 0.8) flicker *= 0.2; // Falha grave perto do monstro
 
     // UNIFORMS
     const uModelViewMatrix = gl.getUniformLocation(shaderProgram, "uModelViewMatrix");
     const uProjectionMatrix = gl.getUniformLocation(shaderProgram, "uProjectionMatrix");
+    const uModelMatrix = gl.getUniformLocation(shaderProgram, "uModelMatrix"); // <--- Pegando local da uniform
     const uUseMTLColor = gl.getUniformLocation(shaderProgram, "uUseMTLColor");
     const uStoneTexture = gl.getUniformLocation(shaderProgram, "uStoneTexture");
     const uTime = gl.getUniformLocation(shaderProgram, "uTime");
@@ -145,13 +146,15 @@ function renderizar() {
         const floorMV = mat4.create();
         mat4.multiply(floorMV, viewMatrix, floorMM);
         gl.uniformMatrix4fv(uModelViewMatrix, false, floorMV);
-        gl.uniform1i(uUseMTLColor, 0); 
+        gl.uniformMatrix4fv(uModelMatrix, false, floorMM); // <--- Passando a Model Matrix
+        gl.uniform1i(uUseMTLColor, 0);
         desenharOBJComCores(gl, floorBuffers, shaderProgram);
     }
 
     // B. LABIRINTO
     if (mazeBuffers) {
         gl.uniformMatrix4fv(uModelViewMatrix, false, viewMatrix);
+        gl.uniformMatrix4fv(uModelMatrix, false, mat4.create()); // Labirinto está na origem
         gl.uniform1i(uUseMTLColor, 0);
         desenharOBJComCores(gl, mazeBuffers, shaderProgram);
     }
@@ -170,6 +173,7 @@ function renderizar() {
             const mv = mat4.create();
             mat4.multiply(mv, viewMatrix, mm);
             gl.uniformMatrix4fv(uModelViewMatrix, false, mv);
+            gl.uniformMatrix4fv(uModelMatrix, false, mm); // <--- Passando a Model Matrix
             desenharOBJComCores(gl, keyBuffers, shaderProgram);
         }
     }
@@ -181,11 +185,12 @@ function renderizar() {
         for (const pos of positions) {
             const mm = mat4.create();
             mat4.translate(mm, mm, [pos.x, pos.y, pos.z]);
-            if(rotateY !== 0) mat4.rotateY(mm, mm, rotateY);
+            if (rotateY !== 0) mat4.rotateY(mm, mm, rotateY);
             mat4.scale(mm, mm, [scale, scale, scale]);
             const mv = mat4.create();
             mat4.multiply(mv, viewMatrix, mm);
             gl.uniformMatrix4fv(uModelViewMatrix, false, mv);
+            gl.uniformMatrix4fv(uModelMatrix, false, mm); // <--- Passando a Model Matrix
             desenharOBJComCores(gl, buffers, shaderProgram);
         }
     };
@@ -206,12 +211,13 @@ function renderizar() {
         const mv = mat4.create();
         mat4.multiply(mv, viewMatrix, mm);
         gl.uniformMatrix4fv(uModelViewMatrix, false, mv);
+        gl.uniformMatrix4fv(uModelMatrix, false, mm); // <--- Passando a Model Matrix
         desenharOBJComCores(gl, moonBuffers, shaderProgram);
     }
 
     // F. LANTERNA (Overlay na mão)
     if (lanternaBuffers) {
-        gl.clear(gl.DEPTH_BUFFER_BIT); 
+        gl.clear(gl.DEPTH_BUFFER_BIT);
         const bob = Math.sin(keyAnimationTime * 2.0) * 0.005;
         const mm = mat4.create();
         mat4.translate(mm, mm, [0.35, -0.4 + bob, -0.7]);
@@ -219,6 +225,7 @@ function renderizar() {
         mat4.rotateX(mm, mm, Math.PI / 2);
         mat4.scale(mm, mm, [0.025, 0.025, 0.025]);
         gl.uniformMatrix4fv(uModelViewMatrix, false, mm);
+        gl.uniformMatrix4fv(uModelMatrix, false, mm); // <--- Passando a Model Matrix (Corrigido para usar mm, não viewMatrix)
         gl.uniform1i(uUseMTLColor, 1);
         desenharOBJComCores(gl, lanternaBuffers, shaderProgram);
     }
