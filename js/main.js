@@ -14,9 +14,16 @@ let walkCycle = 0; // [HEAD BOBBING] Ciclo de caminhada
 // ===== SISTEMA DE CÂMERA E LIMITES =====
 const MAZE_MIN_X = -1.5, MAZE_MAX_X = 1.5, MAZE_MIN_Z = -1.5, MAZE_MAX_Z = 2.5;
 
-// const ROOM_POSITION = { x: -0.28, y: 0, z: 1.26 };
-const ROOM_POSITION = { x: 0, y: 0, z: 0 }; // Placeholder
-let cameraX = -0.40, cameraY = 0.02, cameraZ = 0.98; // Posição inicial ajustada direto no labirinto
+// ===== SPAWN DO JOGADOR =====
+const PLAYER_SPAWN = {
+    x: -0.40,
+    y: 0.05,
+    z: 0.98
+};
+
+let cameraX = PLAYER_SPAWN.x;
+let cameraY = PLAYER_SPAWN.y;
+let cameraZ = PLAYER_SPAWN.z;
 let cameraYaw = 0, cameraPitch = 0;
 const moveSpeed = 0.01, rotSpeed = 0.03;
 const keys = {};
@@ -56,6 +63,13 @@ function initControls() {
         if (key === ' ') {
             checkDoorInteraction();
         }
+
+        if (key === "e" || key === "E") {
+            if (canOpenDoor && !doorIsOpen) {
+                doorIsOpen = true;
+                console.log("Porta aberta");
+            }
+        }
     });
     document.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 
@@ -74,6 +88,37 @@ function startGame() {
     canvas.requestPointerLock();
 }
 
+function createBoxCollider(cx, cz, size) {
+    return {
+        minX: cx - size,
+        maxX: cx + size,
+        minZ: cz - size,
+        maxZ: cz + size
+    };
+}
+
+const wallColliders = [
+    createBoxCollider(0.61, -0.17, 0.25), // Anubis
+    createBoxCollider(-0.28, 1.36, 0.30)  // Sala
+];
+
+const doorCollider = createBoxCollider(0.0, 1.25, 0.20);
+
+function checkAABBCollision2D(x, z, box) {
+    const playerRadius = 0.15;
+
+    return (
+        x + playerRadius > box.minX &&
+        x - playerRadius < box.maxX &&
+        z + playerRadius > box.minZ &&
+        z - playerRadius < box.maxZ
+    );
+}
+
+let doorIsOpen = false;
+let canOpenDoor = false;
+
+
 function updateCamera() {
     if (isEntrySequenceActive) {
         const elapsedTime = (performance.now() / 1000) - entryStartTime;
@@ -84,7 +129,9 @@ function updateCamera() {
         let startPitch = -Math.PI / 2; // Olhando para baixo
 
         // Posição final (Inicio do jogo)
-        let endX = -0.40, endY = 0.02, endZ = 0.98;
+        let endX = PLAYER_SPAWN.x;
+        let endY = PLAYER_SPAWN.y;
+        let endZ = PLAYER_SPAWN.z;
         let endPitch = 0;
 
         if (elapsedTime < 1.0) {
@@ -105,7 +152,14 @@ function updateCamera() {
             cameraYaw = 0;
         }
 
-        if (progress >= 1.0) isEntrySequenceActive = false;
+        if (progress >= 1.0) {
+            isEntrySequenceActive = false;
+
+            cameraX = PLAYER_SPAWN.x;
+            cameraY = PLAYER_SPAWN.y;
+            cameraZ = PLAYER_SPAWN.z;
+
+        }
         return;
     }
 
@@ -122,24 +176,44 @@ function updateCamera() {
     if (cameraX < MAZE_MIN_X + margin || cameraX > MAZE_MAX_X - margin) cameraX = oldX;
     if (cameraZ < MAZE_MIN_Z + margin || cameraZ > MAZE_MAX_Z - margin) cameraZ = oldZ;
 
-    const checkCollision = (objX, objZ, radius) => {
-        let dist = Math.sqrt(Math.pow(cameraX - objX, 2) + Math.pow(cameraZ - objZ, 2));
-        return dist < radius;
-    };
+    // paredes (eixo X)
+    for (const box of wallColliders) {
+        if (checkAABBCollision2D(cameraX, cameraZ, box)) {
+            cameraX = oldX;
+            break;
+        }
+    }
 
-    if (checkCollision(0.61, -0.17, 0.25)) { cameraX = oldX; cameraZ = oldZ; }
-    if (checkCollision(-0.28, 1.36, 0.22)) { cameraX = oldX; cameraZ = oldZ; }
-    if (cameraX > -0.13 - margin && cameraZ > 1.15 && cameraZ < 1.40) { cameraX = oldX; }
+    // porta (eixo X)
+    if (!doorIsOpen && checkAABBCollision2D(cameraX, cameraZ, doorCollider)) {
+        cameraX = oldX;
+        canOpenDoor = true;
+    }
+
+    // paredes (eixo Z)
+    for (const box of wallColliders) {
+        if (checkAABBCollision2D(cameraX, cameraZ, box)) {
+            cameraZ = oldZ;
+            break;
+        }
+    }
+
+    // porta (eixo Z)
+    if (!doorIsOpen && checkAABBCollision2D(cameraX, cameraZ, doorCollider)) {
+        cameraZ = oldZ;
+        canOpenDoor = true;
+    }
 
     // [HEAD BOBBING] Efeito de caminhada
     const isMoving = keys['w'] || keys['s'] || keys['a'] || keys['d'];
     if (isMoving) {
         walkCycle += 0.15; // Velocidade do passo
         // Senoide para subir e descer a câmera (simulando passos)
-        cameraY = 0.02 + Math.sin(walkCycle) * 0.015;
+        const bob = Math.max(0, Math.sin(walkCycle)) * 0.012;
+        cameraY = PLAYER_SPAWN.y + bob;
     } else {
         // Se parar, volta suavemente para a altura original
-        cameraY = cameraY * 0.9 + 0.02 * 0.1;
+        cameraY += (PLAYER_SPAWN.y - cameraY) * 0.15;
         walkCycle = 0;
     }
 
@@ -147,6 +221,11 @@ function updateCamera() {
     if (keys['arrowright']) cameraYaw += rotSpeed;
     if (keys['arrowup']) cameraPitch = Math.min(cameraPitch + rotSpeed, Math.PI / 3);
     if (keys['arrowdown']) cameraPitch = Math.max(cameraPitch - rotSpeed, -Math.PI / 3);
+
+    if (cameraY < PLAYER_SPAWN.y) {
+        cameraY = PLAYER_SPAWN.y;
+    }
+
 }
 
 async function iniciaWebGL() {
@@ -321,13 +400,21 @@ function renderizar() {
 
     // 1. LABIRINTO
     if (mazeBuffers) {
+        gl.disable(gl.DEPTH_TEST);
+        gl.disable(gl.CULL_FACE);
+
         gl.uniform1i(uUseMTLColor, 0);
         gl.uniform1i(uIsRoomObject, 0);
         gl.uniformMatrix4fv(uModelViewMatrix, false, viewMatrix);
         desenharOBJComCores(gl, mazeBuffers, shaderProgram);
+
+        gl.enable(gl.DEPTH_TEST);
     }
 
-    // 2. CHAVES
+    gl.enable(gl.CULL_FACE);
+    gl.cullFace(gl.BACK);
+
+    // 2. CHAVES    
     keyAnimationTime += 0.03;
     if (keyBuffers) {
         gl.uniform1i(uIsKey, 1); gl.uniform1i(uUseMTLColor, 1);
@@ -381,9 +468,15 @@ function renderizar() {
     // 5. PORTA (Saída + Entrada)
     if (doorBuffers) {
         gl.disable(gl.CULL_FACE);
-        // Porta de Saída
-        renderM(doorBuffers, [doorPosition], 0.3, 0, 1);
 
+        // Porta de Saída
+        const animatedDoorPosition = { ...doorPosition };
+
+        if (doorIsOpen) {
+            animatedDoorPosition.y += 2.0; // sobe a porta
+        }
+
+        renderM(doorBuffers, [animatedDoorPosition], 0.3, 0, 1);
         // Porta de Entrada (Fechando o labirinto)
         // Posição ajustada para fechar o corredor inicial
         renderM(doorBuffers, [{ x: -0.35, y: 0, z: 1.08 }], 0.3, 0, 1);
@@ -411,7 +504,7 @@ function renderizar() {
         // [SYNC HEAD BOB] A lanterna deve acompanhar o movimento da câmera
         // cameraY varia entre 0.005 e 0.035. O offset base da lanterna é -0.4.
         // Adicionamos (cameraY - 0.02) * 5.0 para amplificar o movimento na mão
-        let bobY = (cameraY - 0.02) * 2.0;
+        let bobY = (cameraY - PLAYER_SPAWN.y) * 2.0;
 
         let breathing = Math.sin(keyAnimationTime * 2) * 0.002; // Respiração leve parada
 
