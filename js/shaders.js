@@ -61,6 +61,12 @@ const fsSource = `#version 300 es
         vec3 V = normalize(-vViewPos);
         vec3 L = V; 
         
+        // --- ILUMINAÇÃO BILATERAL (Two-Sided Lighting) ---
+        // Se a normal está apontando para longe da câmera, inverte para iluminar corretamente
+        if (dot(N, V) < 0.0) {
+            N = -N;
+        }
+        
         // --- LANTERNA SUAVE (CONE) ---
         vec3 cameraDir = vec3(0.0, 0.0, -1.0);
         float theta = dot(normalize(vViewPos), cameraDir);

@@ -3,7 +3,8 @@
  */
 
 let gl, shaderProgram, stoneTexture;
-let mazeBuffers, floorBuffers, keyBuffers, gravestoneBuffers, bonesBuffers;
+let generatedMaze; // Novo: labirinto gerado
+let keyBuffers, gravestoneBuffers, bonesBuffers;
 let angelBuffers, anubisBuffers, treeBuffers, skeletonBuffers, moonBuffers;
 let candelabraBuffers, roomBuffers, tableBuffers, whiteboardBuffers, doorBuffers, lanternaBuffers;
 
@@ -12,20 +13,21 @@ let lanternaLigada = true; // [ESTADO DA LANTERNA] Começa ligada
 let walkCycle = 0; // [HEAD BOBBING] Ciclo de caminhada
 
 // ===== SISTEMA DE CÂMERA E LIMITES =====
-const MAZE_MIN_X = -1.5, MAZE_MAX_X = 1.5, MAZE_MIN_Z = -1.5, MAZE_MAX_Z = 2.5;
+// Limites serão definidos após geração do labirinto
+let MAZE_MIN_X = -5.5, MAZE_MAX_X = 5.5, MAZE_MIN_Z = -5.5, MAZE_MAX_Z = 5.5;
 
-// ===== SPAWN DO JOGADOR =====
-const PLAYER_SPAWN = {
-    x: -0.40,
-    y: 0.05,
-    z: 0.98
+// ===== SPAWN DO JOGADOR (será atualizado pelo gerador) =====
+let PLAYER_SPAWN = {
+    x: 0,
+    y: 0.15,
+    z: 4.5
 };
 
 let cameraX = PLAYER_SPAWN.x;
 let cameraY = PLAYER_SPAWN.y;
 let cameraZ = PLAYER_SPAWN.z;
-let cameraYaw = 0, cameraPitch = 0;
-const moveSpeed = 0.01, rotSpeed = 0.03;
+let cameraYaw = Math.PI, cameraPitch = 0; // Olhando para norte
+const moveSpeed = 0.01, rotSpeed = 0.03; // Velocidade ajustada
 const keys = {};
 
 // ===== SISTEMA DE JOGO (HUD & LOGICA) =====
@@ -38,16 +40,16 @@ let isEntrySequenceActive = false;
 let entryStartTime = 0;
 const ENTRY_DURATION = 3.0;
 
-// ===== POSIÇÕES DOS OBJETOS =====
-const keyPositions = [{ x: -0.11, y: 0.03, z: -0.14 }, { x: -0.75, y: 0.03, z: -0.95 }, { x: 0.90, y: 0.03, z: 0.95 }];
-const gravestonesPositions = [{ x: -0.56, y: -0.05, z: -0.08 }, { x: -0.31, y: -0.05, z: 0.44 }, { x: 0.41, y: -0.05, z: -0.86 }];
-const bonesPositions = [{ x: -0.22, y: -0.05, z: 0.48 }, { x: 0.69, y: -0.05, z: -0.35 }];
-const angelPositions = [{ x: 0.89, y: 0.025, z: -1 }];
-const anubisPositions = [{ x: 0.61, y: 0.04, z: -0.17 }];
-const treePositions = [{ x: 0.80, y: 0, z: 0.78 }];
-const skeletonPositions = [{ x: 0.14, y: 0, z: 0.30 }];
-const moonPosition = { x: 0.0, y: 6.0, z: -2.0 };
-const doorPosition = { x: 0.55, y: 0, z: -1.16 };
+// ===== POSIÇÕES DOS OBJETOS (serão atualizadas pelo gerador) =====
+let keyPositions = [];
+let gravestonesPositions = [];
+let bonesPositions = [];
+let angelPositions = [];
+let anubisPositions = [];
+let treePositions = [];
+let skeletonPositions = [];
+let moonPosition = { x: 0, y: 8.0, z: -3.0 };
+let doorPosition = { x: 0, y: 0, z: -5.0 };
 
 function initControls() {
     document.addEventListener('keydown', (e) => {
@@ -73,7 +75,26 @@ function initControls() {
     });
     document.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 
+    // [CONTROLE DO MOUSE] Movimento da câmera
+    document.addEventListener('mousemove', (e) => {
+        // Só funciona quando o pointer está bloqueado (jogo em andamento)
+        if (document.pointerLockElement) {
+            const sensitivity = 0.002;
+            cameraYaw += e.movementX * sensitivity;
+            cameraPitch -= e.movementY * sensitivity;
 
+            // Limita o pitch para não virar de cabeça para baixo
+            cameraPitch = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, cameraPitch));
+        }
+    });
+
+    // [POINTER LOCK] Clique para recapturar o mouse
+    const canvas = document.querySelector("#meuCanvas");
+    canvas.addEventListener('click', () => {
+        if (!document.pointerLockElement && startTime > 0) {
+            canvas.requestPointerLock();
+        }
+    });
 }
 
 function startGame() {
@@ -97,15 +118,88 @@ function createBoxCollider(cx, cz, size) {
     };
 }
 
-const wallColliders = [
-    createBoxCollider(0.61, -0.17, 0.25), // Anubis
-    createBoxCollider(-0.28, 1.36, 0.30)  // Sala
-];
+// Cria collider retangular para paredes finas (x1,z1 até x2,z2 + espessura t)
+function createThinWall(x1, z1, x2, z2, t = 0.05) {
+    return {
+        minX: Math.min(x1, x2) - t,
+        maxX: Math.max(x1, x2) + t,
+        minZ: Math.min(z1, z2) - t,
+        maxZ: Math.max(z1, z2) + t
+    };
+}
 
-const doorCollider = createBoxCollider(0.0, 1.25, 0.20);
+// ===== COLLIDERS DAS PAREDES DO LABIRINTO =====
+// Baseado na imagem do Blender - Vista de cima
+// Labirinto vai de aprox. X: -1.2 a 1.05, Z: -1.17 a 1.08
+// Espessura das paredes: ~0.03
+
+const WALL_THICKNESS = 0.03;
+
+function createHWall(x1, x2, z) { // Parede Horizontal
+    return {
+        minX: Math.min(x1, x2),
+        maxX: Math.max(x1, x2),
+        minZ: z - WALL_THICKNESS,
+        maxZ: z + WALL_THICKNESS
+    };
+}
+
+function createVWall(x, z1, z2) { // Parede Vertical
+    return {
+        minX: x - WALL_THICKNESS,
+        maxX: x + WALL_THICKNESS,
+        minZ: Math.min(z1, z2),
+        maxZ: Math.max(z1, z2)
+    };
+}
+
+// ===== SISTEMA DE COLISÃO BASEADO EM MATRIZ 2D =====
+// A matriz agora é gerada pelo maze_generator.js
+// 1 = parede (bloqueado), 0 = caminho (livre)
+
+let CELL_SIZE = 0.15;
+let MAZE_ORIGIN_X = -1.20;
+let MAZE_ORIGIN_Z = -1.17;
+
+// Matriz do labirinto - será preenchida pelo gerador
+let mazeGrid = [];
+
+function worldToGrid(worldX, worldZ) {
+    const gridX = Math.floor((worldX - MAZE_ORIGIN_X) / CELL_SIZE);
+    const gridZ = Math.floor((worldZ - MAZE_ORIGIN_Z) / CELL_SIZE);
+    return { x: gridX, z: gridZ };
+}
+
+function isPositionBlocked(worldX, worldZ) {
+    const grid = worldToGrid(worldX, worldZ);
+    if (grid.z < 0 || grid.z >= mazeGrid.length) return true;
+    if (grid.x < 0 || grid.x >= mazeGrid[0].length) return true;
+    return mazeGrid[grid.z][grid.x] === 1;
+}
+
+function checkMazeCollision(worldX, worldZ, radius) {
+    const offsets = [
+        { x: -radius, z: -radius },
+        { x: radius, z: -radius },
+        { x: -radius, z: radius },
+        { x: radius, z: radius },
+    ];
+    for (const offset of offsets) {
+        if (isPositionBlocked(worldX + offset.x, worldZ + offset.z)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Colliders serão criados dinamicamente após geração do labirinto
+let wallColliders = [];
+
+// Door collider será atualizado após geração
+let doorCollider = { minX: -0.5, maxX: 0.5, minZ: -6, maxZ: -5 };
 
 function checkAABBCollision2D(x, z, box) {
-    const playerRadius = 0.15;
+    const playerRadius = 0.25; // Raio maior para labirinto maior
 
     return (
         x + playerRadius > box.minX &&
@@ -124,15 +218,17 @@ function updateCamera() {
         const elapsedTime = (performance.now() / 1000) - entryStartTime;
         let progress = Math.min(elapsedTime / ENTRY_DURATION, 1.0);
 
-        // Posição inicial (Origem, alto)
-        let startX = 0, startY = 4.0, startZ = 0;
+        // Posição inicial (alto, centro do mapa)
+        let startX = 0, startY = 12.0, startZ = 0;
         let startPitch = -Math.PI / 2; // Olhando para baixo
+        let startYaw = 0;
 
         // Posição final (Inicio do jogo)
         let endX = PLAYER_SPAWN.x;
         let endY = PLAYER_SPAWN.y;
         let endZ = PLAYER_SPAWN.z;
         let endPitch = 0;
+        let endYaw = Math.PI; // Olhando para norte
 
         if (elapsedTime < 1.0) {
             // [Fase 1] Espera um pouco lá em cima
@@ -140,7 +236,7 @@ function updateCamera() {
             cameraY = startY;
             cameraZ = startZ;
             cameraPitch = startPitch;
-            cameraYaw = 0;
+            cameraYaw = startYaw;
         } else {
             // [Fase 2] Desce para o labirinto
             const moveEase = -(Math.cos(Math.PI * Math.min((elapsedTime - 1.0) / 2.0, 1.0)) - 1) / 2;
@@ -149,7 +245,7 @@ function updateCamera() {
             cameraY = startY + (endY - startY) * moveEase;
             cameraZ = startZ + (endZ - startZ) * moveEase;
             cameraPitch = startPitch + (endPitch - startPitch) * moveEase;
-            cameraYaw = 0;
+            cameraYaw = startYaw + (endYaw - startYaw) * moveEase;
         }
 
         if (progress >= 1.0) {
@@ -172,34 +268,35 @@ function updateCamera() {
     if (keys['a']) { cameraX -= rightX * moveSpeed; cameraZ -= rightZ * moveSpeed; }
     if (keys['d']) { cameraX += rightX * moveSpeed; cameraZ += rightZ * moveSpeed; }
 
-    const margin = 0.15;
+    const margin = 0.10;
+    const playerRadius = 0.12;
+
+    // Verifica colisão com a MATRIZ do labirinto
+    // Tenta mover em X primeiro
+    if (checkMazeCollision(cameraX, oldZ, playerRadius)) {
+        cameraX = oldX;
+    }
+    // Depois tenta mover em Z
+    if (checkMazeCollision(cameraX, cameraZ, playerRadius)) {
+        cameraZ = oldZ;
+    }
+
+    // Limites do mapa
     if (cameraX < MAZE_MIN_X + margin || cameraX > MAZE_MAX_X - margin) cameraX = oldX;
     if (cameraZ < MAZE_MIN_Z + margin || cameraZ > MAZE_MAX_Z - margin) cameraZ = oldZ;
 
-    // paredes (eixo X)
+    // Objetos específicos (Anubis)
     for (const box of wallColliders) {
         if (checkAABBCollision2D(cameraX, cameraZ, box)) {
             cameraX = oldX;
-            break;
-        }
-    }
-
-    // porta (eixo X)
-    if (!doorIsOpen && checkAABBCollision2D(cameraX, cameraZ, doorCollider)) {
-        cameraX = oldX;
-        canOpenDoor = true;
-    }
-
-    // paredes (eixo Z)
-    for (const box of wallColliders) {
-        if (checkAABBCollision2D(cameraX, cameraZ, box)) {
             cameraZ = oldZ;
             break;
         }
     }
 
-    // porta (eixo Z)
+    // porta
     if (!doorIsOpen && checkAABBCollision2D(cameraX, cameraZ, doorCollider)) {
+        cameraX = oldX;
         cameraZ = oldZ;
         canOpenDoor = true;
     }
@@ -245,6 +342,39 @@ async function iniciaWebGL() {
     shaderProgram = createProgramFromSources(gl, vsSource, fsSource);
 
     try {
+        // Inicializa o labirinto gerado
+        generatedMaze = initializeMaze(gl);
+        mazeGrid = generatedMaze.matrix;
+        CELL_SIZE = generatedMaze.config.cellSize;
+        MAZE_ORIGIN_X = generatedMaze.config.originX;
+        MAZE_ORIGIN_Z = generatedMaze.config.originZ;
+
+        // Atualiza limites do mapa
+        const mazeWidth = generatedMaze.config.gridWidth * CELL_SIZE;
+        const mazeHeight = generatedMaze.config.gridHeight * CELL_SIZE;
+        MAZE_MIN_X = MAZE_ORIGIN_X;
+        MAZE_MAX_X = MAZE_ORIGIN_X + mazeWidth;
+        MAZE_MIN_Z = MAZE_ORIGIN_Z;
+        MAZE_MAX_Z = MAZE_ORIGIN_Z + mazeHeight;
+
+        // Usa posições geradas automaticamente
+        const obj = generatedMaze.objects;
+        PLAYER_SPAWN = obj.spawn;
+        doorPosition = obj.door;
+        keyPositions = obj.keys;
+        angelPositions = obj.angel;
+        anubisPositions = obj.anubis;
+        gravestonesPositions = obj.gravestones;
+        bonesPositions = obj.bones;
+        treePositions = obj.trees;
+        skeletonPositions = obj.skeleton;
+        moonPosition = obj.moon;
+
+        // Atualiza posição inicial da câmera
+        cameraX = PLAYER_SPAWN.x;
+        cameraY = PLAYER_SPAWN.y;
+        cameraZ = PLAYER_SPAWN.z;
+
         async function prepararModelo(path, normalizar = true) {
             const rawData = await carregarOBJComMTL(path);
             if (!rawData.vertices || rawData.vertices.length === 0) return null;
@@ -253,7 +383,7 @@ async function iniciaWebGL() {
             return criarBuffersOBJComCores(gl, finalData);
         }
 
-        mazeBuffers = await prepararModelo('modelos/Maze.0/model.obj', false);
+        // mazeBuffers removido - agora usa generatedMaze.buffers
         keyBuffers = await prepararModelo('modelos/Key/Key_01(1).obj');
         gravestoneBuffers = await prepararModelo('modelos/gravestone/model.obj');
         bonesBuffers = await prepararModelo('modelos/Pile of Bones/PileBones.obj');
@@ -398,17 +528,19 @@ function renderizar() {
     gl.bindTexture(gl.TEXTURE_2D, stoneTexture);
     gl.uniform1i(gl.getUniformLocation(shaderProgram, "uStoneTexture"), 0);
 
-    // 1. LABIRINTO
-    if (mazeBuffers) {
-        gl.disable(gl.DEPTH_TEST);
-        gl.disable(gl.CULL_FACE);
+    // 1. LABIRINTO (Gerado proceduralmente)
+    if (generatedMaze && generatedMaze.buffers) {
+        gl.disable(gl.CULL_FACE); // Paredes vistas de ambos lados
 
         gl.uniform1i(uUseMTLColor, 0);
         gl.uniform1i(uIsRoomObject, 0);
         gl.uniformMatrix4fv(uModelViewMatrix, false, viewMatrix);
-        desenharOBJComCores(gl, mazeBuffers, shaderProgram);
 
-        gl.enable(gl.DEPTH_TEST);
+        // Usa a textura de pedra
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, stoneTexture);
+
+        drawMaze(gl, generatedMaze.buffers, shaderProgram, stoneTexture);
     }
 
     gl.enable(gl.CULL_FACE);
@@ -421,9 +553,9 @@ function renderizar() {
         keyPositions.forEach((pos, i) => {
             // SÓ DESENHA SE NÃO FOI COLETADA
             if (!collectedKeys[i]) {
-                let bounce = Math.sin(keyAnimationTime * 3 + i) * 0.02;
+                let bounce = Math.sin(keyAnimationTime * 3 + i) * 0.05;
                 let mm = multiplyMatrices(mat4Translate(pos.x, pos.y + bounce, pos.z),
-                    multiplyMatrices(mat4RotateY(keyAnimationTime * 2), mat4Scale(0.08, 0.08, 0.08)));
+                    multiplyMatrices(mat4RotateY(keyAnimationTime * 2), mat4Scale(0.2, 0.2, 0.2)));
                 gl.uniformMatrix4fv(uModelViewMatrix, false, multiplyMatrices(viewMatrix, mm));
                 desenharOBJComCores(gl, keyBuffers, shaderProgram);
             }
@@ -444,12 +576,12 @@ function renderizar() {
         });
     };
 
-    renderM(gravestoneBuffers, gravestonesPositions, 0.05);
-    renderM(bonesBuffers, bonesPositions, 0.05);
-    renderM(angelBuffers, angelPositions, 0.15);
-    renderM(anubisBuffers, anubisPositions, 0.15);
-    renderM(treeBuffers, treePositions, 0.3);
-    renderM(skeletonBuffers, skeletonPositions, 0.12, Math.PI);
+    renderM(gravestoneBuffers, gravestonesPositions, 0.15);
+    renderM(bonesBuffers, bonesPositions, 0.12);
+    renderM(angelBuffers, angelPositions, 0.4);
+    renderM(anubisBuffers, anubisPositions, 0.4);
+    renderM(treeBuffers, treePositions, 0.6);
+    renderM(skeletonBuffers, skeletonPositions, 0.25, Math.PI);
 
     /* [QUARTO REMOVIDO TEMPORARIAMENTE]
     // 4. QUARTO
@@ -465,21 +597,18 @@ function renderizar() {
     renderM(whiteboardBuffers, [{ x: ROOM_POSITION.x + 0.10, y: 0, z: ROOM_POSITION.z }], 0.3, -Math.PI / 2, 1);
     */
 
-    // 5. PORTA (Saída + Entrada)
+    // 5. PORTA (Saída)
     if (doorBuffers) {
         gl.disable(gl.CULL_FACE);
 
-        // Porta de Saída
+        // Porta de Saída (norte)
         const animatedDoorPosition = { ...doorPosition };
 
         if (doorIsOpen) {
-            animatedDoorPosition.y += 2.0; // sobe a porta
+            animatedDoorPosition.y += 3.0; // sobe a porta
         }
 
-        renderM(doorBuffers, [animatedDoorPosition], 0.3, 0, 1);
-        // Porta de Entrada (Fechando o labirinto)
-        // Posição ajustada para fechar o corredor inicial
-        renderM(doorBuffers, [{ x: -0.35, y: 0, z: 1.08 }], 0.3, 0, 1);
+        renderM(doorBuffers, [animatedDoorPosition], 0.6, 0, 1);
 
         gl.enable(gl.CULL_FACE);
     }
