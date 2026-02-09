@@ -2,6 +2,8 @@
 
 Shadow Maze é um jogo de exploração e suspense em primeira pessoa desenvolvido integralmente em WebGL Puro. O projeto utiliza algoritmos de geração procedural para criar labirintos únicos a cada execução, desafiando o jogador a coletar chaves e encontrar a saída sob a iluminação limitada de uma lanterna.
 
+Segue o link a seguir para ver uma demonstração do jogo: http://youtube.com/watch?v=89soTRX60c4
+
 ## Funcionalidades Técnicas
 
 Este projeto foi desenvolvido como requisito para a disciplina de Computação Gráfica, focando na implementação de baixo nível sem o uso de bibliotecas gráficas de alto nível.
