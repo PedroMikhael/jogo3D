@@ -56,24 +56,21 @@ function mat4RotateZ(angle) {
 }
 
 /**
- * Rotação em X usando graus (estilo do professor)
- * Equivalente a: matrotX do código do professor
+ * Rotação em X usando graus 
  */
 function mat4RotateXDegrees(angleDegrees) {
     return mat4RotateX(degreesToRadians(angleDegrees));
 }
 
 /**
- * Rotação em Y usando graus (estilo do professor)
- * Equivalente a: matrotY do código do professor
+ * Rotação em Y usando graus 
  */
 function mat4RotateYDegrees(angleDegrees) {
     return mat4RotateY(degreesToRadians(angleDegrees));
 }
 
 /**
- * Rotação em Z usando graus (estilo do professor)
- * Equivalente a: matrotZ do código do professor
+ * Rotação em Z usando graus 
  */
 function mat4RotateZDegrees(angleDegrees) {
     return mat4RotateZ(degreesToRadians(angleDegrees));

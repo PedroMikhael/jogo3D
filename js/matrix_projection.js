@@ -2,7 +2,6 @@
  * Matrizes de Projeção e Câmera
  * Funções para criar matrizes de projeção perspectiva, ortográfica e view (lookAt)
  * 
- * Inclui funções do professor: createPerspective e createCamera
  */
 
 /**
@@ -57,8 +56,7 @@ function perspective(fov, aspect, near, far) {
 }
 
 /**
- * Cria uma matriz de projeção perspectiva usando graus (estilo do professor)
- * Equivalente a: createPerspective do código do professor
+ * Cria uma matriz de projeção perspectiva usando graus 
  * @param {number} fovy - Campo de visão vertical em GRAUS
  * @param {number} aspect - Proporção largura/altura
  * @param {number} near - Plano de corte próximo
@@ -134,9 +132,6 @@ function lookAt(eye, center, up) {
 }
 
 /**
- * Cria uma matriz de câmera (estilo do professor)
- * Equivalente a: createCamera do código do professor
- * Nota: Esta versão NÃO requer math.js
  * @param {Array} pos - Posição da câmera [x, y, z]
  * @param {Array} target - Ponto alvo [x, y, z]
  * @param {Array} up - Vetor up [x, y, z]

@@ -114,7 +114,7 @@ function normalizarModelo(modelo) {
         vertices: normalizedVertices,
         normais: modelo.normais,
         texturas: modelo.texturas,
-        cores: modelo.cores, // <--- LINHA VITAL ADICIONADA: REPASSA AS CORES DO MTL
+        cores: modelo.cores,
         indices: modelo.indices,
         numVertices: modelo.numVertices,
         numFaces: modelo.numFaces

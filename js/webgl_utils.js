@@ -1,7 +1,4 @@
-/**
- * Funções utilitárias WebGL (código do professor)
- * Gerencia contexto, shaders e programas
- */
+
 
 /**
  * Obtém o contexto WebGL do canvas

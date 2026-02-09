@@ -1,10 +1,9 @@
 /**
- * MAZE_GENERATOR.JS - VERSÃO 2.0
- * Labirinto completamente novo do zero
+ * MAZE_GENERATOR.JS    
  * 21x21 células com posicionamento automático de objetos
  */
 
-// ===== CONFIGURAÇÕES DO NOVO LABIRINTO =====
+// ===== CONFIGURAÇÕES DO LABIRINTO =====
 const MAZE_CONFIG = {
     gridWidth: 21,       // Largura em células
     gridHeight: 21,      // Altura em células
@@ -14,7 +13,7 @@ const MAZE_CONFIG = {
     originZ: -5.25,      // Origem Z (centralizado)
 };
 
-// ===== GERADOR DE LABIRINTO (DFS - Recursive Backtracker) =====
+// ===== GERADOR DE LABIRINTO =====
 function generateMazeMatrix(width, height) {
     // Inicializa matriz toda como parede (1)
     const maze = [];
@@ -49,8 +48,8 @@ function generateMazeMatrix(width, height) {
 
     // DFS iterativo com stack
     const stack = [];
-    const startX = 1;
-    const startZ = height - 2; // Começa perto da entrada (sul)
+    const startX = Math.floor(width / 2) % 2 === 0 ? Math.floor(width / 2) + 1 : Math.floor(width / 2);
+    const startZ = height - 2; // Começa na entrada (sul)
 
     maze[startZ][startX] = 0;
     stack.push({ x: startX, z: startZ });
@@ -75,7 +74,7 @@ function generateMazeMatrix(width, height) {
     // === ENTRADAS E SAÍDAS ===
     // Entrada (sul) - centro
     const entranceX = Math.floor(width / 2);
-    if (entranceX % 2 === 0) entranceX + 1; // Garante célula ímpar (caminho)
+    if (entranceX % 2 === 0) entranceX + 1; // Mantém a lógica original mas o spawn real será ajustado no placeObjects
     maze[height - 1][entranceX] = 0;
     maze[height - 2][entranceX] = 0;
 
@@ -124,8 +123,9 @@ function placeObjects(maze, emptyCells) {
     const height = maze.length;
     const width = maze[0].length;
 
-    // Spawn do jogador (sul, centro)
-    const spawnGridX = Math.floor(width / 2);
+    // Spawn do jogador (sul, centro ajustado para ímpar)
+    let spawnGridX = Math.floor(width / 2);
+    if (spawnGridX % 2 === 0) spawnGridX += 1;
     const spawnGridZ = height - 2;
     const spawnWorld = gridToWorld(spawnGridX, spawnGridZ);
 
@@ -155,45 +155,45 @@ function placeObjects(maze, emptyCells) {
     for (let i = 0; i < 3; i++) {
         const pos = getNextCell();
         if (pos) {
-            keyPositions.push({ x: pos.x, y: 0.03, z: pos.z });
+            keyPositions.push({ x: pos.x, y: 0.2, z: pos.z });
         }
     }
 
     // === POSICIONAR ESTÁTUAS ===
     const angelPositions = [];
     const pos1 = getNextCell();
-    if (pos1) angelPositions.push({ x: pos1.x, y: 0.025, z: pos1.z });
+    if (pos1) angelPositions.push({ x: pos1.x, y: 0.08, z: pos1.z });
 
     const anubisPositions = [];
     const pos2 = getNextCell();
-    if (pos2) anubisPositions.push({ x: pos2.x, y: 0.04, z: pos2.z });
+    if (pos2) anubisPositions.push({ x: pos2.x, y: 0.08, z: pos2.z });
 
     // === POSICIONAR DECORAÇÕES ===
     const gravestonesPositions = [];
     for (let i = 0; i < 4; i++) {
         const pos = getNextCell();
-        if (pos) gravestonesPositions.push({ x: pos.x, y: -0.05, z: pos.z });
+        if (pos) gravestonesPositions.push({ x: pos.x, y: 0.05, z: pos.z });
     }
 
     const bonesPositions = [];
     for (let i = 0; i < 3; i++) {
         const pos = getNextCell();
-        if (pos) bonesPositions.push({ x: pos.x, y: -0.05, z: pos.z });
+        if (pos) bonesPositions.push({ x: pos.x, y: 0.03, z: pos.z });
     }
 
     const treePositions = [];
     for (let i = 0; i < 2; i++) {
         const pos = getNextCell();
-        if (pos) treePositions.push({ x: pos.x, y: 0, z: pos.z });
+        if (pos) treePositions.push({ x: pos.x, y: 0.07, z: pos.z });
     }
 
     const skeletonPositions = [];
     const pos3 = getNextCell();
-    if (pos3) skeletonPositions.push({ x: pos3.x, y: 0, z: pos3.z });
+    if (pos3) skeletonPositions.push({ x: pos3.x, y: 0.3, z: pos3.z });
 
     return {
-        spawn: { x: spawnWorld.x, y: 0.15, z: spawnWorld.z },
-        door: { x: exitWorld.x, y: 0, z: exitWorld.z },
+        spawn: { x: 0, y: 0.15, z: 5 },
+        door: { x: exitWorld.x, y: 0, z: -4.75 },
         keys: keyPositions,
         angel: angelPositions,
         anubis: anubisPositions,
@@ -385,7 +385,6 @@ function drawMaze(gl, buffers, shaderProgram, texture) {
     gl.drawElements(gl.TRIANGLES, buffers.vertexCount, gl.UNSIGNED_SHORT, 0);
 }
 
-// ===== API PÚBLICA =====
 function initializeMaze(gl) {
     const maze = generateMazeMatrix(MAZE_CONFIG.gridWidth, MAZE_CONFIG.gridHeight);
     const emptyCells = findEmptyCells(maze);

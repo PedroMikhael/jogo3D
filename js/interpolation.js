@@ -4,7 +4,7 @@
  */
 
 /**
- * Calcula a interpolação de Z em uma linha de varrimento (Página 14).
+ * Calcula a interpolação de Z em uma linha de varrimento .
  * @param {number} z1 - Valor de Z no primeiro ponto
  * @param {number} z2 - Valor de Z no segundo ponto
  * @param {number} y1 - Coordenada Y do primeiro ponto
@@ -16,7 +16,7 @@ function interpolaZ(z1, z2, y1, y2, ys) {
 }
 
 /**
- * Calcula o Zp final entre dois pontos a e b (Página 14).
+ * Calcula o Zp final entre dois pontos a e b .
  * @param {number} za - Valor de Z no ponto a
  * @param {number} zb - Valor de Z no ponto b
  * @param {number} xa - Coordenada X do ponto a

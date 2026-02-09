@@ -1,7 +1,3 @@
-/**
- * js/shaders.js
- * Versão Corrigida: Mapeamento Triplanar para evitar esticamento + Luz Ambiente Global
- */
 
 const vsSource = `#version 300 es
     precision highp float;

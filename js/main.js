@@ -1,9 +1,6 @@
-/**
- * ARQUIVO: main.js (VERSÃO FINAL MERGE - LANTERNA COM TECLA F)
- */
 
 let gl, shaderProgram, stoneTexture;
-let generatedMaze; // Novo: labirinto gerado
+let generatedMaze; 
 let keyBuffers, gravestoneBuffers, bonesBuffers;
 let angelBuffers, anubisBuffers, treeBuffers, skeletonBuffers, moonBuffers;
 let candelabraBuffers, roomBuffers, tableBuffers, whiteboardBuffers, doorBuffers, lanternaBuffers;
@@ -20,14 +17,14 @@ let MAZE_MIN_X = -5.5, MAZE_MAX_X = 5.5, MAZE_MIN_Z = -5.5, MAZE_MAX_Z = 5.5;
 let PLAYER_SPAWN = {
     x: 0,
     y: 0.15,
-    z: 4.5
+    z: 5.13
 };
 
 let cameraX = PLAYER_SPAWN.x;
 let cameraY = PLAYER_SPAWN.y;
 let cameraZ = PLAYER_SPAWN.z;
-let cameraYaw = Math.PI, cameraPitch = 0; // Olhando para norte
-const moveSpeed = 0.01, rotSpeed = 0.03; // Velocidade ajustada
+let cameraYaw = Math.PI, cameraPitch = 0; // Olhando para sul (180 graus)
+const moveSpeed = 0.015, rotSpeed = 0.03; // Velocidade ajustada
 const keys = {};
 
 // ===== SISTEMA DE JOGO (HUD & LOGICA) =====
@@ -107,6 +104,22 @@ function startGame() {
     entryStartTime = performance.now() / 1000;
     const canvas = document.querySelector("#meuCanvas");
     canvas.requestPointerLock();
+
+    // [MUSICA] Toca a música de fundo
+    const music = document.getElementById('bg-music');
+    if (music) {
+        music.volume = 1.0;
+        const playPromise = music.play();
+        if (playPromise !== undefined) {
+            playPromise.then(_ => {
+                console.log("Música iniciada com sucesso!");
+            }).catch(error => {
+                console.error("Erro ao tocar música:", error);
+                // Tenta tocar novamente ao interagir
+                document.addEventListener('click', () => music.play(), { once: true });
+            });
+        }
+    }
 }
 
 function createBoxCollider(cx, cz, size) {
@@ -129,8 +142,6 @@ function createThinWall(x1, z1, x2, z2, t = 0.05) {
 }
 
 // ===== COLLIDERS DAS PAREDES DO LABIRINTO =====
-// Baseado na imagem do Blender - Vista de cima
-// Labirinto vai de aprox. X: -1.2 a 1.05, Z: -1.17 a 1.08
 // Espessura das paredes: ~0.03
 
 const WALL_THICKNESS = 0.03;
@@ -228,7 +239,7 @@ function updateCamera() {
         let endY = PLAYER_SPAWN.y;
         let endZ = PLAYER_SPAWN.z;
         let endPitch = 0;
-        let endYaw = Math.PI; // Olhando para norte
+        let endYaw = 0; // Olhando para sul
 
         if (elapsedTime < 1.0) {
             // [Fase 1] Espera um pouco lá em cima
@@ -304,12 +315,10 @@ function updateCamera() {
     // [HEAD BOBBING] Efeito de caminhada
     const isMoving = keys['w'] || keys['s'] || keys['a'] || keys['d'];
     if (isMoving) {
-        walkCycle += 0.15; // Velocidade do passo
-        // Senoide para subir e descer a câmera (simulando passos)
+        walkCycle += 0.15; 
         const bob = Math.max(0, Math.sin(walkCycle)) * 0.012;
         cameraY = PLAYER_SPAWN.y + bob;
     } else {
-        // Se parar, volta suavemente para a altura original
         cameraY += (PLAYER_SPAWN.y - cameraY) * 0.15;
         walkCycle = 0;
     }
@@ -522,7 +531,7 @@ function renderizar() {
     gl.uniform1f(uLightIntensity, lanternaLigada ? 1.0 : 0.0);
 
     const uCutOffLoc = gl.getUniformLocation(shaderProgram, "uCutOff");
-    gl.uniform1f(uCutOffLoc, Math.cos(Math.PI / 12));
+    gl.uniform1f(uCutOffLoc, Math.cos(Math.PI / 50));
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, stoneTexture);
@@ -583,20 +592,6 @@ function renderizar() {
     renderM(treeBuffers, treePositions, 0.6);
     renderM(skeletonBuffers, skeletonPositions, 0.25, Math.PI);
 
-    /* [QUARTO REMOVIDO TEMPORARIAMENTE]
-    // 4. QUARTO
-    if (roomBuffers) {
-        gl.uniform1i(uUseMTLColor, 1); gl.uniform1i(uIsRoomObject, 1);
-        let mm = multiplyMatrices(mat4Translate(ROOM_POSITION.x, ROOM_POSITION.y, ROOM_POSITION.z),
-            multiplyMatrices(mat4RotateY(-Math.PI / 2), mat4Scale(0.4, 0.4, 0.4)));
-        gl.uniformMatrix4fv(uModelViewMatrix, false, multiplyMatrices(viewMatrix, mm));
-        desenharOBJComCores(gl, roomBuffers, shaderProgram);
-    }
-
-    renderM(tableBuffers, [{ x: ROOM_POSITION.x, y: -0.05, z: ROOM_POSITION.z + 0.1 }], 0.08, 0, 1);
-    renderM(whiteboardBuffers, [{ x: ROOM_POSITION.x + 0.10, y: 0, z: ROOM_POSITION.z }], 0.3, -Math.PI / 2, 1);
-    */
-
     // 5. PORTA (Saída)
     if (doorBuffers) {
         gl.disable(gl.CULL_FACE);
@@ -608,7 +603,7 @@ function renderizar() {
             animatedDoorPosition.y += 3.0; // sobe a porta
         }
 
-        renderM(doorBuffers, [animatedDoorPosition], 0.6, 0, 1);
+        renderM(doorBuffers, [animatedDoorPosition], 1.5, 0, 1);
 
         gl.enable(gl.CULL_FACE);
     }

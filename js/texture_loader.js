@@ -1,14 +1,7 @@
-/**
- * Módulo de carregamento de texturas
- * Consolida as melhorias da branch 'main' com a estrutura da 'mapa'
- */
 
 var texImages = [];
 var loadedTexCount = 0;
 
-/**
- * Carrega múltiplas texturas (Padrão do professor)
- */
 function loadTexturesFromSources(texSources, onAllLoaded) {
     loadedTexCount = 0;
     texImages = [];
@@ -29,10 +22,6 @@ function loadTexturesFromSources(texSources, onAllLoaded) {
     }
 }
 
-/**
- * Envia uma imagem para a GPU como textura 
- * IMPORTANTE: Usa configurações da branch MAIN (MIPMAP + REPEAT)
- */
 function createTextureFromImage(gl, image, textureUnit) {
     var tex = gl.createTexture();
     gl.activeTexture(gl.TEXTURE0 + textureUnit);
@@ -54,9 +43,6 @@ function createTextureFromImage(gl, image, textureUnit) {
     return tex;
 }
 
-/**
- * Força a repetição da textura (útil para atualizar texturas existentes)
- */
 function setTextureRepeat(gl, texture) {
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
@@ -64,7 +50,7 @@ function setTextureRepeat(gl, texture) {
 }
 
 /**
- * Carrega uma imagem e cria uma textura WebGL (Versão moderna Async)
+ * Carrega uma imagem e cria uma textura WebGL 
  */
 async function carregarTextura(gl, url) {
     return new Promise((resolve, reject) => {
