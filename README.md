@@ -6,17 +6,17 @@ Shadow Maze é um jogo de exploração e suspense em primeira pessoa desenvolvid
 
 Este projeto foi desenvolvido como requisito para a disciplina de Computação Gráfica, focando na implementação de baixo nível sem o uso de bibliotecas gráficas de alto nível.
 
-* [cite_start]**Leitor de OBJ Próprio**: Implementação de um parser para arquivos .obj e .mtl, realizando a leitura assíncrona de geometria e materiais.
+* **Leitor de OBJ Próprio**: Implementação de um parser para arquivos .obj e .mtl, realizando a leitura assíncrona de geometria e materiais.
 * **Geração Procedural**: Labirinto gerado via algoritmo DFS (Recursive Backtracker), garantindo que todos os caminhos sejam alcançáveis.
-* [cite_start]**Iluminação Dinâmica (Phong)**: Sistema de iluminação fragmento a fragmento utilizando o modelo de reflexão de Phong, simulando um feixe de luz de lanterna (Spotlight) com atenuação por distância.
-* [cite_start]**Mapeamento Triplanar**: Técnica utilizada para evitar o esticamento de texturas em superfícies procedurais, combinando projeções nos eixos X, Y e Z.
-* [cite_start]**Normalização de Modelos**: Algoritmo que centraliza e redimensiona modelos externos para um cubo unitário, garantindo consistência visual independente da escala original do Blender.
+* **Iluminação Dinâmica (Phong)**: Sistema de iluminação fragmento a fragmento utilizando o modelo de reflexão de Phong, simulando um feixe de luz de lanterna (Spotlight) com atenuação por distância.
+* **Mapeamento Triplanar**: Técnica utilizada para evitar o esticamento de texturas em superfícies procedurais, combinando projeções nos eixos X, Y e Z.
+* **Normalização de Modelos**: Algoritmo que centraliza e redimensiona modelos externos para um cubo unitário, garantindo consistência visual independente da escala original do Blender.
 
 
 
 ## Comandos
 
-* [cite_start]**W, A, S, D**: Movimentação do jogador.
+* **W, A, S, D**: Movimentação do jogador.
 * **Mouse ou setas**: Controle de visão (Câmera em primeira pessoa).
 * **F**: Ligar/Desligar lanterna.
 * **Espaço**: Interagir com a porta de saída (após coletar as chaves).
@@ -24,8 +24,8 @@ Este projeto foi desenvolvido como requisito para a disciplina de Computação G
 ## Requisitos de Sistema
 
 O projeto utiliza exclusivamente:
-* [cite_start]**WebGL Puro** para renderização.
-* [cite_start]**Álgebra Linear Própria** para transformações de matrizes (MVP).
+* **WebGL Puro** para renderização.
+* **Álgebra Linear Própria** para transformações de matrizes (MVP).
 * **Canvas HTML5** para criação do contexto gráfico.
 
 ## Como Executar
@@ -57,8 +57,8 @@ Caso prefira usar o Node.js:
 
 ## Equipe
 
-* [cite_start]Fabio Azevedo 
-* [cite_start]Pedro Mikhael 
-* [cite_start]Rian Vilanova 
-* [cite_start]João Victor 
-* [cite_start]Bianca Leão 
+* Fabio Azevedo 
+* Pedro Mikhael 
+* Rian Vilanova 
+* João Victor 
+* Bianca Leão 
